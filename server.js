@@ -2,13 +2,22 @@ const express = require('express');
 const fetch = require('node-fetch');
 const cron = require('node-cron');
 const app = express();
-app.use(express.json());
+app.use(express.json({ limit: '2mb' }));
 
-const CLAUDE_KEY = process.env.CLAUDE_KEY;
+// ─── CORS — permite chamadas do Netlify ────────────────────────────────────────
+app.use((req, res, next) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  if (req.method === 'OPTIONS') return res.sendStatus(200);
+  next();
+});
+
+const CLAUDE_KEY    = process.env.CLAUDE_KEY;
 const EVOLUTION_URL = process.env.EVOLUTION_URL;
 const EVOLUTION_KEY = process.env.EVOLUTION_KEY;
-const INSTANCE = process.env.INSTANCE_NAME || 'farmabot-trindade';
-const PORT = process.env.PORT || 3000;
+const INSTANCE      = process.env.INSTANCE_NAME || 'farmabot-trindade';
+const PORT          = process.env.PORT || 3000;
 
 const SYSTEM = `Você é a FarmaBot, assistente farmacêutica virtual da UBS de Trindade-GO, criada pela farmacêutica Vanessa, Diretora de Assistência Farmacêutica do município.
 
@@ -29,48 +38,66 @@ REGRAS ABSOLUTAS:
 - Só mencione medicamentos disponíveis no SUS/REMUME
 - Em emergências: SAMU 192`;
 
-// Histórico de conversas por número
 const historicos = {};
-
-// Pacientes cadastrados (em memória — depois migrar para banco)
 const pacientes = [];
 
-// Receber mensagens do WhatsApp
+// ═══════════════════════════════════════════════════════════════════════════════
+// PROXY CLAUDE — chamado pelo painel (evita CORS no browser)
+// ═══════════════════════════════════════════════════════════════════════════════
+app.post('/api/claude', async (req, res) => {
+  try {
+    const { model, max_tokens, system, messages } = req.body;
+
+    if (!CLAUDE_KEY) {
+      return res.status(500).json({ error: 'CLAUDE_KEY não configurada no servidor.' });
+    }
+
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': CLAUDE_KEY,
+        'anthropic-version': '2023-06-01'
+      },
+      body: JSON.stringify({
+        model: model || 'claude-sonnet-4-20250514',
+        max_tokens: max_tokens || 1000,
+        system: system || '',
+        messages: messages || []
+      })
+    });
+
+    const data = await response.json();
+    res.json(data);
+  } catch (erro) {
+    console.error('Erro no proxy Claude:', erro.message);
+    res.status(500).json({ error: erro.message });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// WEBHOOK WHATSAPP
+// ═══════════════════════════════════════════════════════════════════════════════
 app.post('/webhook', async (req, res) => {
   res.sendStatus(200);
-  
   try {
     const body = req.body;
     if (!body || !body.data) return;
-    
     const data = body.data;
     if (data.key?.fromMe) return;
-    
     const numero = data.key?.remoteJid;
-    const mensagem = data.message?.conversation || 
+    const mensagem = data.message?.conversation ||
                      data.message?.extendedTextMessage?.text || '';
-    
     if (!mensagem || !numero) return;
-    if (numero.includes('@g.us')) return; // ignorar grupos
-    
+    if (numero.includes('@g.us')) return;
     console.log(`Mensagem de ${numero}: ${mensagem}`);
-    
-    // Buscar paciente cadastrado
     const paciente = pacientes.find(p => numero.includes(p.telefone));
-    const contextoPaciente = paciente 
+    const contextoPaciente = paciente
       ? `\nPACIENTE IDENTIFICADO: ${paciente.nome}, ${paciente.idade} anos, condições: ${paciente.condicoes?.join(', ')}, medicamentos: ${paciente.medicamentos?.map(m => `${m.nome} (${m.dose} - ${m.horarios?.join(', ')})`).join('; ')}`
       : '';
-    
-    // Montar histórico
     if (!historicos[numero]) historicos[numero] = [];
     historicos[numero].push({ role: 'user', content: mensagem });
-    
-    // Manter apenas as últimas 10 mensagens
-    if (historicos[numero].length > 10) {
-      historicos[numero] = historicos[numero].slice(-10);
-    }
-    
-    // Chamar a IA
+    if (historicos[numero].length > 10) historicos[numero] = historicos[numero].slice(-10);
     const resposta = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -85,30 +112,20 @@ app.post('/webhook', async (req, res) => {
         messages: historicos[numero]
       })
     });
-    
     const dados = await resposta.json();
     const texto = dados.content?.[0]?.text || 'Desculpe, tive um problema. Tente novamente.';
-    
-    // Salvar resposta no histórico
     historicos[numero].push({ role: 'assistant', content: texto });
-    
-    // Enviar resposta via WhatsApp
     await enviarMensagem(numero, texto);
-    
   } catch (erro) {
     console.error('Erro no webhook:', erro.message);
   }
 });
 
-// Função para enviar mensagem
 async function enviarMensagem(numero, texto) {
   try {
     await fetch(`${EVOLUTION_URL}/message/sendText/${INSTANCE}`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'apikey': EVOLUTION_KEY
-      },
+      headers: { 'Content-Type': 'application/json', 'apikey': EVOLUTION_KEY },
       body: JSON.stringify({ number: numero, text: texto })
     });
   } catch (erro) {
@@ -116,64 +133,79 @@ async function enviarMensagem(numero, texto) {
   }
 }
 
-// Endpoint para cadastrar paciente (chamado pelo painel)
+// ═══════════════════════════════════════════════════════════════════════════════
+// PACIENTES
+// ═══════════════════════════════════════════════════════════════════════════════
 app.post('/pacientes', (req, res) => {
   const paciente = req.body;
   const index = pacientes.findIndex(p => p.id === paciente.id);
-  if (index >= 0) {
-    pacientes[index] = paciente;
-  } else {
-    pacientes.push(paciente);
-  }
+  if (index >= 0) pacientes[index] = paciente;
+  else pacientes.push(paciente);
   console.log(`Paciente cadastrado: ${paciente.nome}`);
   res.json({ ok: true, total: pacientes.length });
 });
 
-// Endpoint de saúde
+app.delete('/pacientes/:id', (req, res) => {
+  const id = parseInt(req.params.id);
+  const index = pacientes.findIndex(p => p.id === id);
+  if (index >= 0) {
+    const nome = pacientes[index].nome;
+    pacientes.splice(index, 1);
+    console.log(`Paciente removido: ${nome}`);
+    res.json({ ok: true });
+  } else {
+    res.status(404).json({ error: 'Paciente não encontrado' });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// SAÚDE
+// ═══════════════════════════════════════════════════════════════════════════════
 app.get('/', (req, res) => {
-  res.json({ 
-    status: 'FarmaBot SUS rodando!',
+  res.json({
+    status: '✅ FarmaBot SUS rodando!',
     pacientes: pacientes.length,
-    versao: '1.0.0',
-    municipio: 'Trindade-GO'
+    versao: '2.0.0',
+    municipio: 'Trindade-GO',
+    endpoints: ['/api/claude', '/webhook', '/pacientes']
   });
 });
 
-// Lembretes automáticos por horário
+// ═══════════════════════════════════════════════════════════════════════════════
+// LEMBRETES AUTOMÁTICOS
+// ═══════════════════════════════════════════════════════════════════════════════
 const LEMBRETES = {
-  '0 7 * * *':  { horario: '07:00', msg: '🌅 Bom dia! Hora do remédio da manhã. Não esqueça de tomar com água.' },
-  '30 7 * * *': { horario: '07:30', msg: '☕ Antes do café da manhã — tome o remédio do diabetes agora.' },
-  '0 12 * * *': { horario: '12:00', msg: '🍽️ Hora do almoço! Lembre do remédio junto com a refeição.' },
-  '30 19 * * *':{ horario: '19:30', msg: '🍛 Hora do jantar! Não esqueça do remédio do diabetes.' },
-  '0 19 * * *': { horario: '19:00', msg: '🌙 Boa noite! Hora da dose da tarde/noite do remédio da pressão.' },
-  '0 22 * * *': { horario: '22:00', msg: '💊 Hora do remédio da noite. Tome antes de dormir conforme orientado.' },
+  '0 7 * * *':   { horario: '07:00', msg: '🌅 Bom dia! Hora do remédio da manhã.' },
+  '30 7 * * *':  { horario: '07:30', msg: '☕ Antes do café da manhã — tome o remédio agora.' },
+  '0 12 * * *':  { horario: '12:00', msg: '🍽️ Hora do almoço! Lembre do remédio junto com a refeição.' },
+  '30 19 * * *': { horario: '19:30', msg: '🍛 Hora do jantar! Não esqueça do remédio.' },
+  '0 19 * * *':  { horario: '19:00', msg: '🌙 Hora da dose da tarde/noite do remédio da pressão.' },
+  '0 22 * * *':  { horario: '22:00', msg: '💊 Hora do remédio da noite. Tome antes de dormir.' },
 };
 
 Object.entries(LEMBRETES).forEach(([cron_expr, { horario, msg }]) => {
   cron.schedule(cron_expr, () => {
     pacientes.forEach(paciente => {
-      const temHorario = paciente.medicamentos?.some(m => 
-        m.horarios?.some(h => h.toLowerCase().includes(horario.substring(0,2)) || 
+      const temHorario = paciente.medicamentos?.some(m =>
+        m.horarios?.some(h =>
+          h.toLowerCase().includes(horario.substring(0,2)) ||
           (horario === '07:00' && h.includes('manhã')) ||
           (horario === '07:30' && h.includes('café')) ||
           (horario === '12:00' && h.includes('almoço')) ||
           (horario === '19:30' && h.includes('jantar')) ||
-          (horario === '19:00' && h.includes('noite') && h.includes('tarde')) ||
           (horario === '22:00' && h.includes('noite'))
         )
       );
-      
       if (temHorario && paciente.telefone) {
         const numero = `55${paciente.telefone}@s.whatsapp.net`;
-        const msgPersonalizada = `Olá, ${paciente.nome.split(' ')[0]}! ${msg}`;
-        enviarMensagem(numero, msgPersonalizada);
-        console.log(`Lembrete enviado para ${paciente.nome} às ${horario}`);
+        enviarMensagem(numero, `Olá, ${paciente.nome.split(' ')[0]}! ${msg}`);
+        console.log(`Lembrete para ${paciente.nome} às ${horario}`);
       }
     });
   }, { timezone: 'America/Sao_Paulo' });
 });
 
 app.listen(PORT, () => {
-  console.log(`FarmaBot SUS rodando na porta ${PORT}`);
-  console.log(`Municipio: Trindade-GO | DAF`);
+  console.log(`✅ FarmaBot SUS rodando na porta ${PORT}`);
+  console.log(`Município: Trindade-GO | DAF`);
 });
