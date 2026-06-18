@@ -204,7 +204,80 @@ Object.entries(LEMBRETES).forEach(([cron_expr, { horario, msg }]) => {
     });
   }, { timezone: 'America/Sao_Paulo' });
 });
+// ═══════════════════════════════════════════════════════════════════════════════
+// WEBHOOK Z-API — recebe mensagens do WhatsApp
+// ═══════════════════════════════════════════════════════════════════════════════
+const ZAPI_INSTANCE = '3F4D6B03EE9C617B8CDD0252E275B4B9';
+const ZAPI_TOKEN    = 'A4D3736EEDDA74521229CB3B';
 
+app.post('/webhook/zapi', async (req, res) => {
+  res.sendStatus(200);
+  try {
+    const body = req.body;
+    if (!body || body.fromMe) return;
+    const numero  = body.phone;
+    const texto   = body.text?.message || body.message || '';
+    if (!texto || !numero) return;
+    if (body.isGroup) return;
+    console.log(`📩 Z-API | ${numero}: ${texto}`);
+
+    const paciente = pacientes.find(p => numero.includes(p.telefone));
+
+    // Emergência
+    const ehEmergencia = ['dor no peito','falta de ar','desmaio','pressão muito alta','convulsão','infarto']
+      .some(g => texto.toLowerCase().includes(g));
+    if (ehEmergencia) {
+      await zapiEnviar(numero, '🚨 ATENÇÃO! Pelos sintomas que descreveu, ligue AGORA para o SAMU: *192*\n\nNão espere — sua saúde é prioridade!');
+      return;
+    }
+
+    // Pergunta sobre estoque → encaminhar para farmacêutico
+    const ehEstoque = ['tem ','disponível','disponivel','acabou','faltou','buscar','retirar','pegar','estoque']
+      .some(g => texto.toLowerCase().includes(g));
+    if (ehEstoque) {
+      await zapiEnviar(numero, 'Sua mensagem foi encaminhada para o farmacêutico da sua UBS. ⏳\n\nEm breve você receberá uma resposta. Emergências: SAMU 192.');
+      return;
+    }
+
+    // IA responde
+    if (!historicos[numero]) historicos[numero] = [];
+    historicos[numero].push({ role: 'user', content: texto });
+    if (historicos[numero].length > 10) historicos[numero] = historicos[numero].slice(-10);
+
+    const contextoPaciente = paciente
+      ? `\nPACIENTE: ${paciente.nome}, ${paciente.idade} anos, condições: ${paciente.condicoes?.join(', ')}, medicamentos: ${paciente.medicamentos?.map(m=>`${m.nome} (${m.dose})`).join('; ')}`
+      : '';
+
+    const resposta = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': CLAUDE_KEY, 'anthropic-version': '2023-06-01' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 500,
+        system: SYSTEM + contextoPaciente,
+        messages: historicos[numero]
+      })
+    });
+    const dados = await resposta.json();
+    const respostaTexto = dados.content?.[0]?.text || 'Desculpe, tive um problema. Tente novamente.';
+    historicos[numero].push({ role: 'assistant', content: respostaTexto });
+    await zapiEnviar(numero, respostaTexto);
+  } catch(e) {
+    console.error('Erro webhook Z-API:', e.message);
+  }
+});
+
+async function zapiEnviar(numero, mensagem) {
+  try {
+    await fetch(`https://api.z-api.io/instances/${ZAPI_INSTANCE}/token/${ZAPI_TOKEN}/send-text`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone: numero, message: mensagem })
+    });
+  } catch(e) {
+    console.error('Erro ao enviar Z-API:', e.message);
+  }
+}
 app.listen(PORT, () => {
   console.log(`✅ FarmaBot SUS rodando na porta ${PORT}`);
   console.log(`Município: Trindade-GO | DAF`);
