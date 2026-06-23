@@ -666,10 +666,21 @@ async function analisarPrescricao(p) {
         </div>
       </div>
     </div>
-    <div style="margin-top:14px;padding:10px;background:var(--cinza-bg);border-radius:var(--r);font-size:12px;color:var(--texto-sec)">
-      🔗 Verificar manualmente:
-      <a href="https://www.drugs.com/interactions-check.php" target="_blank" style="color:var(--azul);font-weight:600">Drugs.com</a> ·
-      <a href="https://reference.medscape.com/drug-interactionchecker" target="_blank" style="color:var(--azul);font-weight:600">Medscape</a>
+    <div style="margin-top:14px;padding:12px;background:var(--azul-bg);border:1px solid #B5D3F3;border-radius:var(--r)">
+      <div style="font-weight:700;color:var(--azul);font-size:13px;margin-bottom:8px">🔗 Verificar interações online</div>
+      <div style="font-size:12px;color:var(--texto-sec);margin-bottom:10px">Clique para abrir com os medicamentos já preenchidos:</div>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <a href="${montarLinkDrugs(p.medicamentos)}" target="_blank"
+          style="display:flex;align-items:center;gap:8px;padding:9px 12px;background:white;border:1px solid #B5D3F3;border-radius:var(--r-sm);font-size:12px;font-weight:600;color:var(--azul);text-decoration:none">
+          💊 Abrir no Drugs.com Interaction Checker
+          <span style="font-size:10px;opacity:.7;margin-left:auto">${p.medicamentos?.length||0} medicamentos →</span>
+        </a>
+        <a href="https://reference.medscape.com/drug-interactionchecker" target="_blank"
+          style="display:flex;align-items:center;gap:8px;padding:9px 12px;background:white;border:1px solid #B5D3F3;border-radius:var(--r-sm);font-size:12px;font-weight:600;color:var(--azul);text-decoration:none">
+          🏥 Abrir no Medscape Drug Interaction Checker
+          <span style="font-size:10px;opacity:.7;margin-left:auto">verificação manual →</span>
+        </a>
+      </div>
     </div>
     <div class="modal-acoes">
       <button class="btn btn-c" onclick='verPaciente(${JSON.stringify(p).replace(/'/g,"&#39;")})'>← Voltar</button>
@@ -733,29 +744,60 @@ Analise considerando:
 4. Duplicidade terapêutica
 5. Adequação das doses para a idade
 
-Seja objetivo e prático. Use linguagem que um farmacêutico do SUS entenda. Formate com marcadores.`;
+Seja objetivo e prático. Use linguagem que um farmacêutico do SUS entenda. Formate com marcadores claros.`;
 
+  // Tenta Gemini (gratuito) primeiro, depois Claude como fallback
+  const GEMINI_KEY = 'AIzaSyDemoKeyTrocePelaRealAqui'; // substitua pela sua chave
   try {
-    const res = await fetch(`${BACKEND}/api/claude`, {
-      method: 'POST',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 1000,
-        system: 'Você é um farmacêutico clínico especialista em farmácia hospitalar e geriatria. Analise prescrições de forma objetiva e prática para farmacêuticos do SUS.',
-        messages: [{role:'user', content: prompt}]
-      })
-    });
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_KEY}`,
+      {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({
+          contents:[{parts:[{text: prompt}]}],
+          generationConfig:{maxOutputTokens:1000,temperature:0.3}
+        })
+      }
+    );
     const d = await res.json();
-    const texto = d.content?.[0]?.text;
-    if (!texto) throw new Error('Sem resposta');
-    el.innerHTML = `<div style="font-size:12px;line-height:1.7;white-space:pre-wrap;color:var(--texto)">${texto}</div>`;
+    const texto = d.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!texto) throw new Error('Sem resposta Gemini');
+    el.innerHTML = `
+      <div style="font-size:11px;color:var(--roxo);margin-bottom:8px;font-weight:600">🤖 Análise gerada por Gemini 1.5 Flash</div>
+      <div style="font-size:12px;line-height:1.7;white-space:pre-wrap;color:var(--texto)">${texto}</div>`;
   } catch(e) {
-    el.innerHTML = `<div style="font-size:12px;color:var(--vermelho)">⚠️ IA indisponível no momento (créditos Anthropic esgotados ou servidor offline).<br><br>
-      Use manualmente:<br>
-      → <a href="https://www.drugs.com/interactions-check.php" target="_blank" style="color:var(--azul)">Drugs.com Interaction Checker</a><br>
-      → <a href="https://reference.medscape.com/drug-interactionchecker" target="_blank" style="color:var(--azul)">Medscape Drug Interaction Checker</a>
-    </div>`;
+    // Fallback: Claude via backend
+    try {
+      const res2 = await fetch(`${BACKEND}/api/claude`, {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-6',
+          max_tokens: 1000,
+          system: 'Você é um farmacêutico clínico especialista em farmácia hospitalar e geriatria. Analise prescrições de forma objetiva e prática para farmacêuticos do SUS.',
+          messages: [{role:'user', content: prompt}]
+        })
+      });
+      const d2 = await res2.json();
+      const texto2 = d2.content?.[0]?.text;
+      if (!texto2) throw new Error('Sem resposta Claude');
+      el.innerHTML = `
+        <div style="font-size:11px;color:var(--roxo);margin-bottom:8px;font-weight:600">🤖 Análise gerada por Claude AI</div>
+        <div style="font-size:12px;line-height:1.7;white-space:pre-wrap;color:var(--texto)">${texto2}</div>`;
+    } catch(e2) {
+      el.innerHTML = `
+        <div style="font-size:12px;color:var(--vermelho)">
+          ⚠️ IA indisponível. Configure a chave do Gemini (gratuita) para usar essa função.<br><br>
+          <strong>Como obter a chave gratuita:</strong><br>
+          → Acesse <a href="https://aistudio.google.com/app/apikey" target="_blank" style="color:var(--azul)">aistudio.google.com</a><br>
+          → Clique em "Create API Key"<br>
+          → Cole no código (linha GEMINI_KEY)<br><br>
+          Enquanto isso, use manualmente:<br>
+          → <a href="https://www.drugs.com/interactions-check.php" target="_blank" style="color:var(--azul)">Drugs.com Interaction Checker</a><br>
+          → <a href="https://reference.medscape.com/drug-interactionchecker" target="_blank" style="color:var(--azul)">Medscape Drug Interaction Checker</a>
+        </div>`;
+    }
   }
 }
 
@@ -1178,6 +1220,17 @@ async function verificarBeers(nomeMed, pacId) {
     el.innerHTML = `<div style="font-size:12px;color:var(--texto-ter);margin-top:8px">⚠️ Não foi possível verificar agora. Salve e confira manualmente.</div>`;
     window._beersAlerta = { alerta: false, motivo: null };
   }
+}
+
+function montarLinkDrugs(medicamentos) {
+  if (!medicamentos?.length) return 'https://www.drugs.com/interactions-check.php';
+  // Drugs.com aceita nomes via parâmetro drug_list separado por vírgula
+  // Extrai só o nome genérico (antes do primeiro número)
+  const nomes = medicamentos.map(m => {
+    const nome = m.nome.split(' ')[0].toLowerCase(); // ex: "METFORMINA" → "metformina"
+    return encodeURIComponent(nome);
+  }).slice(0, 30); // limite de 30
+  return `https://www.drugs.com/interactions-check.php?drug_list=${nomes.join(',')}`;
 }
 
 function checarInteracoes(novo, existentes) {
