@@ -1,0 +1,970 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FarmaBot SUS — DAF Trindade-GO</title>
+<style>
+:root {
+  --verde:#0B6B50;--verde-m:#1A9E75;--verde-bg:#E2F5EE;--verde-borda:#A8DFCA;
+  --azul:#1655A0;--azul-bg:#E5F0FB;
+  --ambar:#B8720F;--ambar-bg:#FDF0D8;--ambar-borda:#F5C97A;
+  --vermelho:#9E2A2A;--vermelho-bg:#FCEAEA;--vermelho-borda:#F0A0A0;
+  --roxo:#4F42B5;--roxo-bg:#EEEDFD;
+  --cinza:#5A5956;--cinza-bg:#F2F0EB;--cinza-borda:#D5D2C8;
+  --texto:#1E1D1B;--texto-sec:#5A5956;--texto-ter:#908D86;
+  --fundo:#F6F4EF;--branco:#FFFFFF;--borda:#D8D5CE;
+  --sombra:0 2px 8px rgba(0,0,0,.08);--r:10px;--r-sm:6px;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--fundo);color:var(--texto);font-size:14px;line-height:1.5;}
+button{cursor:pointer;font-family:inherit;}
+input,select,textarea{font-family:inherit;}
+
+/* LOGIN */
+#tela-login{min-height:100vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(150deg,#0B6B50 0%,#1655A0 100%);}
+.login-wrap{background:var(--branco);border-radius:16px;padding:44px 40px;width:380px;box-shadow:0 8px 32px rgba(0,0,0,.18);}
+.login-brand{display:flex;align-items:center;gap:12px;margin-bottom:28px;}
+.login-icon{width:48px;height:48px;background:var(--verde-bg);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;}
+.login-brand h1{font-size:17px;font-weight:800;}
+.login-brand p{font-size:12px;color:var(--texto-sec);}
+.lbl{display:block;font-size:11px;font-weight:700;color:var(--texto-sec);text-transform:uppercase;letter-spacing:.5px;margin-bottom:5px;}
+.inp{width:100%;padding:11px 13px;border:1.5px solid var(--borda);border-radius:var(--r-sm);font-size:14px;outline:none;transition:border-color .2s;}
+.inp:focus{border-color:var(--verde-m);}
+.fg{margin-bottom:13px;}
+.btn-login-submit{width:100%;padding:13px;background:var(--verde);color:#fff;border:none;border-radius:var(--r-sm);font-size:14px;font-weight:700;margin-top:6px;}
+.btn-login-submit:hover{background:var(--verde-m);}
+.err-txt{color:var(--vermelho);font-size:12px;margin-top:8px;display:none;}
+
+/* SHELL */
+#tela-app{display:none;}
+.topbar{background:var(--verde);color:#fff;height:54px;padding:0 20px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:200;box-shadow:0 2px 8px rgba(0,0,0,.15);}
+.topbar-l{display:flex;align-items:center;gap:10px;}
+.topbar-nome{font-weight:800;font-size:15px;}
+.topbar-ubs{font-size:11px;opacity:.8;}
+.btn-sair{background:rgba(255,255,255,.15);border:none;color:#fff;padding:6px 13px;border-radius:var(--r-sm);font-size:12px;font-weight:600;}
+.btn-sair:hover{background:rgba(255,255,255,.25);}
+.app-body{display:flex;min-height:calc(100vh - 54px);}
+.sidebar{width:210px;background:var(--branco);border-right:1px solid var(--borda);padding:12px 0;flex-shrink:0;position:sticky;top:54px;height:calc(100vh - 54px);overflow-y:auto;}
+.nav-sec{font-size:10px;font-weight:700;color:var(--texto-ter);text-transform:uppercase;letter-spacing:.6px;padding:10px 16px 5px;}
+.nav-item{display:flex;align-items:center;gap:9px;padding:9px 16px;font-size:13px;font-weight:500;color:var(--texto-sec);border:none;background:none;width:100%;text-align:left;position:relative;transition:background .15s;}
+.nav-item:hover{background:var(--cinza-bg);color:var(--texto);}
+.nav-item.ativo{background:var(--verde-bg);color:var(--verde);font-weight:700;}
+.nav-item.ativo::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--verde);}
+.nav-icon{font-size:15px;width:18px;text-align:center;}
+.nav-badge{margin-left:auto;background:var(--ambar-bg);color:var(--ambar);border-radius:10px;padding:1px 6px;font-size:11px;font-weight:700;}
+.nav-badge.r{background:var(--vermelho-bg);color:var(--vermelho);}
+.main{flex:1;padding:24px;min-width:0;max-width:100%;}
+.secao{display:none;}
+.secao.ativa{display:block;}
+
+/* DASH */
+.dash-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:22px;}
+.dc{background:var(--branco);border-radius:var(--r);padding:18px;border:1px solid var(--borda);border-top:3px solid var(--verde-m);}
+.dc.a{border-top-color:var(--ambar);}
+.dc.r{border-top-color:var(--vermelho);}
+.dc.az{border-top-color:var(--azul);}
+.dc.ro{border-top-color:var(--roxo);}
+.dc-lbl{font-size:11px;font-weight:600;color:var(--texto-sec);text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px;}
+.dc-num{font-size:28px;font-weight:800;color:var(--verde);}
+.dc.a .dc-num{color:var(--ambar);}
+.dc.r .dc-num{color:var(--vermelho);}
+.dc.az .dc-num{color:var(--azul);}
+.dc.ro .dc-num{color:var(--roxo);}
+.dc-sub{font-size:11px;color:var(--texto-ter);margin-top:4px;}
+
+/* CARD */
+.card{background:var(--branco);border-radius:var(--r);padding:20px;border:1px solid var(--borda);margin-bottom:16px;}
+.card-tit{font-size:14px;font-weight:700;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;}
+.two-col{display:grid;grid-template-columns:340px 1fr;gap:20px;align-items:start;}
+
+/* BOTÕES */
+.btn{display:inline-flex;align-items:center;gap:5px;padding:9px 15px;border:none;border-radius:var(--r-sm);font-size:13px;font-weight:600;transition:background .15s;}
+.btn-v{background:var(--verde);color:#fff;} .btn-v:hover{background:var(--verde-m);}
+.btn-c{background:var(--cinza-bg);color:var(--texto);} .btn-c:hover{background:var(--cinza-borda);}
+.btn-az{background:var(--azul-bg);color:var(--azul);}
+.btn-am{background:var(--ambar-bg);color:var(--ambar);}
+.btn-ve{background:var(--vermelho-bg);color:var(--vermelho);}
+.btn-ro{background:var(--roxo-bg);color:var(--roxo);}
+.btn-sm{padding:5px 10px;font-size:12px;}
+.btn-full{width:100%;justify-content:center;padding:12px;}
+
+/* LISTA */
+.il{border:1px solid var(--borda);border-radius:var(--r);padding:12px 14px;margin-bottom:8px;display:flex;align-items:center;gap:11px;background:var(--branco);transition:border-color .15s;}
+.il:hover{border-color:var(--verde-m);}
+.av{width:36px;height:36px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px;flex-shrink:0;}
+.av-v{background:var(--verde-bg);color:var(--verde);}
+.av-a{background:var(--ambar-bg);color:var(--ambar);}
+.av-r{background:var(--vermelho-bg);color:var(--vermelho);}
+.av-ro{background:var(--roxo-bg);color:var(--roxo);}
+.av-az{background:var(--azul-bg);color:var(--azul);}
+.ii{flex:1;min-width:0;}
+.in{font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.is{font-size:12px;color:var(--texto-sec);margin-top:1px;}
+.ia{display:flex;gap:5px;flex-shrink:0;}
+.vazia{text-align:center;padding:32px;color:var(--texto-sec);font-size:13px;}
+.vazia em{font-size:26px;display:block;margin-bottom:8px;font-style:normal;}
+
+/* BADGE */
+.badge{display:inline-flex;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700;}
+.bv{background:var(--verde-bg);color:var(--verde);}
+.ba{background:var(--ambar-bg);color:var(--ambar);}
+.br{background:var(--vermelho-bg);color:var(--vermelho);}
+.bc{background:var(--cinza-bg);color:var(--cinza);}
+
+/* BEERS */
+.beers-box{background:var(--vermelho-bg);border:1.5px solid var(--vermelho-borda);border-radius:var(--r);padding:13px;margin-top:10px;}
+.beers-tit{font-weight:700;color:var(--vermelho);font-size:13px;margin-bottom:6px;}
+.beers-li{font-size:12px;color:var(--vermelho);margin-bottom:3px;padding-left:12px;position:relative;}
+.beers-li::before{content:'•';position:absolute;left:2px;}
+.interacao-box{background:var(--ambar-bg);border:1.5px solid var(--ambar-borda);border-radius:var(--r);padding:13px;margin-top:8px;}
+.interacao-tit{font-weight:700;color:var(--ambar);font-size:13px;margin-bottom:6px;}
+.interacao-li{font-size:12px;color:var(--ambar);margin-bottom:3px;padding-left:14px;position:relative;}
+.interacao-li::before{content:'⚠';position:absolute;left:0;font-size:10px;}
+
+/* MED CHIP */
+.med-chip{display:inline-flex;align-items:center;gap:4px;background:var(--verde-bg);color:var(--verde);padding:3px 8px;border-radius:20px;font-size:11px;font-weight:600;margin:2px;}
+.med-chip-r{background:var(--vermelho-bg);color:var(--vermelho);}
+.med-chip-a{background:var(--ambar-bg);color:var(--ambar);}
+
+/* CHAT */
+.conv-item{border:1.5px solid var(--borda);border-radius:var(--r);margin-bottom:8px;overflow:hidden;transition:border-color .15s;}
+.conv-item:hover{border-color:var(--verde-m);}
+.conv-item.aberta{border-color:var(--verde);}
+.conv-header{padding:11px 14px;display:flex;align-items:center;gap:10px;cursor:pointer;background:var(--branco);}
+.conv-info{flex:1;min-width:0;}
+.conv-nome{font-weight:600;font-size:13px;}
+.conv-sub{font-size:12px;color:var(--texto-sec);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.conv-meta{display:flex;flex-direction:column;align-items:flex-end;gap:3px;flex-shrink:0;}
+.conv-chat{display:none;background:#EDE9E0;padding:12px 13px;border-top:1px solid var(--borda);}
+.conv-item.aberta .conv-chat{display:block;}
+.msgs{max-height:240px;overflow-y:auto;display:flex;flex-direction:column;gap:6px;margin-bottom:10px;}
+.msg{max-width:70%;padding:8px 11px;border-radius:9px;font-size:12px;line-height:1.5;}
+.msg.paciente{background:var(--branco);align-self:flex-start;border-bottom-left-radius:2px;}
+.msg.bot{background:var(--verde-bg);color:#0A4A30;align-self:flex-start;border-bottom-left-radius:2px;}
+.msg.farmaceutico{background:var(--verde);color:#fff;align-self:flex-end;border-bottom-right-radius:2px;}
+.msg-meta{font-size:10px;opacity:.6;margin-top:2px;}
+.msg-tipo{font-size:10px;font-weight:700;opacity:.65;margin-bottom:2px;}
+.resp-area{display:flex;gap:8px;align-items:flex-end;}
+.resp-inp{flex:1;padding:9px 12px;border:1.5px solid var(--borda);border-radius:var(--r-sm);font-size:13px;resize:none;outline:none;min-height:42px;max-height:100px;}
+.resp-inp:focus{border-color:var(--verde-m);}
+.btn-enviar{padding:10px 14px;background:var(--verde);color:#fff;border:none;border-radius:var(--r-sm);font-size:13px;font-weight:700;display:flex;align-items:center;gap:5px;white-space:nowrap;}
+.btn-enviar:hover{background:var(--verde-m);}
+.btn-enviar:disabled{opacity:.5;cursor:not-allowed;}
+.btn-resolver-txt{font-size:11px;color:var(--texto-ter);background:none;border:none;margin-top:6px;text-decoration:underline;}
+.btn-resolver-txt:hover{color:var(--texto-sec);}
+
+/* MODAL */
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:300;display:none;align-items:center;justify-content:center;}
+.overlay.aberto{display:flex;}
+.modal{background:var(--branco);border-radius:14px;padding:26px;width:480px;max-width:95vw;max-height:90vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,.2);}
+.modal-tit{font-size:15px;font-weight:800;margin-bottom:18px;}
+.modal-acoes{display:flex;gap:8px;margin-top:18px;justify-content:flex-end;}
+
+/* SPINNER */
+.spin{display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,.4);border-top-color:#fff;border-radius:50%;animation:sp .6s linear infinite;}
+@keyframes sp{to{transform:rotate(360deg);}}
+
+/* TOAST */
+#toast{position:fixed;bottom:20px;right:20px;padding:11px 18px;border-radius:9px;font-size:13px;font-weight:600;z-index:999;transform:translateY(60px);opacity:0;transition:all .3s;pointer-events:none;}
+#toast.show{transform:translateY(0);opacity:1;}
+#toast.ok{background:var(--verde);color:#fff;}
+#toast.err{background:var(--vermelho);color:#fff;}
+
+/* SECAO TITULO */
+.sec-titulo{font-size:18px;font-weight:800;margin-bottom:20px;display:flex;align-items:center;gap:8px;}
+
+/* TABS */
+.tabs{display:flex;gap:3px;margin-bottom:18px;border-bottom:2px solid var(--borda);}
+.tab{padding:8px 16px;border:none;background:none;font-size:13px;font-weight:500;color:var(--texto-sec);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;transition:color .15s;}
+.tab:hover{color:var(--verde);}
+.tab.ativa{color:var(--verde);border-bottom-color:var(--verde);font-weight:700;}
+.tab-painel{display:none;}
+.tab-painel.ativo{display:block;}
+
+@media(max-width:768px){
+  .dash-grid{grid-template-columns:repeat(2,1fr);}
+  .two-col{grid-template-columns:1fr;}
+  .sidebar{display:none;}
+}
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="tela-login">
+  <div class="login-wrap">
+    <div class="login-brand">
+      <div class="login-icon">💊</div>
+      <div><h1>FarmaBot SUS</h1><p>DAF Trindade-GO</p></div>
+    </div>
+    <div class="fg"><label class="lbl">Login</label><input class="inp" id="li" placeholder="CPF ou DAF1401" onkeydown="if(event.key==='Enter')login()"></div>
+    <div class="fg"><label class="lbl">Senha</label><input class="inp" type="password" id="ls" placeholder="Sua senha" onkeydown="if(event.key==='Enter')login()"></div>
+    <button class="btn-login-submit" onclick="login()">Entrar</button>
+    <div class="err-txt" id="lerr">Login ou senha incorretos.</div>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="tela-app">
+  <div class="topbar">
+    <div class="topbar-l">
+      <span>💊</span>
+      <div><div class="topbar-nome" id="tnome">—</div><div class="topbar-ubs" id="tubs">—</div></div>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;">
+      <div id="notif-wrap" style="display:none"><span class="nav-badge r" id="notif-num">0</span></div>
+      <button class="btn-sair" onclick="sair()">Sair</button>
+    </div>
+  </div>
+
+  <div class="app-body">
+    <div class="sidebar" id="sidebar"></div>
+    <div class="main" id="main-content"></div>
+  </div>
+</div>
+
+<div class="overlay" id="overlay"><div class="modal" id="modal-body"></div></div>
+<div id="toast"></div>
+
+<script>
+const BACKEND = 'https://wppconnect-farmabot.onrender.com';
+const SB = 'https://kjwfzsouoeolycekyldd.supabase.co';
+const SK = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imtqd2Z6c291b2VvbHljZWt5bGRkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODExMjcxODksImV4cCI6MjA5NjcwMzE4OX0.aRWc4yBiWx7W8NjQIcHn7JvxAqDho0fnvdzKSndOUDU';
+const AT = 'DAF1401';
+
+let U = null; // usuário logado
+let secaoAtiva = '';
+
+// ── SUPABASE ──
+async function sb(path, opts={}) {
+  const r = await fetch(`${SB}/rest/v1/${path}`, {
+    headers:{'apikey':SK,'Authorization':`Bearer ${SK}`,'Content-Type':'application/json','Prefer':'return=representation',...(opts.headers||{})},
+    ...opts
+  });
+  return r.json();
+}
+
+// ── LOGIN ──
+async function login() {
+  const li = document.getElementById('li').value.trim();
+  const ls = document.getElementById('ls').value;
+  const err = document.getElementById('lerr');
+  err.style.display = 'none';
+
+  // Gestor
+  if (li === AT && ls === AT) {
+    U = { id: 'admin', nome: 'Vanessa', ubs: 'DAF — Diretoria de Assistência Farmacêutica', perfil: 'gestor' };
+    iniciarApp();
+    return;
+  }
+
+  // Farmacêutico
+  try {
+    const d = await sb(`farmabot_usuarios?id=eq.${li}&senha=eq.${encodeURIComponent(ls)}&ativo=eq.true&limit=1`);
+    if (!d?.[0]) { err.style.display = 'block'; return; }
+    U = d[0];
+    U.perfil = U.perfil || 'farmaceutico';
+    sb(`farmabot_usuarios?id=eq.${li}`,{method:'PATCH',body:JSON.stringify({ultimo_acesso:new Date().toISOString()})}).catch(()=>{});
+    iniciarApp();
+  } catch(e) { err.style.display = 'block'; err.textContent = 'Erro de conexão.'; }
+}
+
+function sair() {
+  U = null;
+  document.getElementById('tela-app').style.display = 'none';
+  document.getElementById('tela-login').style.display = 'flex';
+  document.getElementById('li').value = '';
+  document.getElementById('ls').value = '';
+}
+
+function iniciarApp() {
+  document.getElementById('tela-login').style.display = 'none';
+  document.getElementById('tela-app').style.display = 'block';
+  document.getElementById('tnome').textContent = U.nome;
+  document.getElementById('tubs').textContent = U.ubs;
+  renderSidebar();
+  irSecao('dashboard');
+  setInterval(verificarPendencias, 30000);
+}
+
+// ── SIDEBAR ──
+function renderSidebar() {
+  const isGestor = U.perfil === 'gestor';
+  const itens = isGestor ? [
+    {id:'dashboard',icon:'📊',label:'Dashboard'},
+    {id:'ubs',icon:'🏥',label:'UBSs'},
+    {id:'farmaceuticos',icon:'👩‍⚕️',label:'Farmacêuticos'},
+    {id:'conversas-gestor',icon:'💬',label:'Conversas',badge:'conv'},
+  ] : [
+    {id:'dashboard',icon:'📊',label:'Início'},
+    {id:'pacientes',icon:'👥',label:'Meus pacientes'},
+    {id:'conversas',icon:'💬',label:'Conversas',badge:'conv'},
+  ];
+  document.getElementById('sidebar').innerHTML =
+    `<div class="nav-sec">${isGestor ? 'Gestão' : 'Atendimento'}</div>` +
+    itens.map(i=>`<button class="nav-item" id="nav-${i.id}" onclick="irSecao('${i.id}')">
+      <span class="nav-icon">${i.icon}</span>${i.label}
+      ${i.badge ? `<span class="nav-badge r" id="badge-${i.badge}" style="display:none">0</span>` : ''}
+    </button>`).join('');
+}
+
+function irSecao(id) {
+  secaoAtiva = id;
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('ativo'));
+  document.getElementById(`nav-${id}`)?.classList.add('ativo');
+  const main = document.getElementById('main-content');
+  main.innerHTML = '<div style="padding:40px;text-align:center;color:var(--texto-ter)">Carregando...</div>';
+
+  const fns = {
+    dashboard: renderDashboard,
+    ubs: renderUbs,
+    farmaceuticos: renderFarmaceuticos,
+    pacientes: renderPacientes,
+    conversas: ()=>renderConversas(false),
+    'conversas-gestor': ()=>renderConversas(true),
+  };
+  (fns[id] || (()=>{}))();
+}
+
+// ── DASHBOARD ──
+async function renderDashboard() {
+  const isGestor = U.perfil === 'gestor';
+  const [pacs, convs, users] = await Promise.all([
+    sb(isGestor ? 'farmabot_pacientes?select=id' : `farmabot_pacientes?ubs_nome=eq.${enc(U.ubs)}&select=id`),
+    sb(isGestor ? 'farmabot_conversas?pendente=eq.true&select=id' : `farmabot_conversas?unidade=eq.${enc(U.ubs)}&pendente=eq.true&select=id`),
+    isGestor ? sb('farmabot_usuarios?perfil=eq.farmaceutico&ativo=eq.true&select=id') : Promise.resolve([]),
+  ]);
+
+  // Conta alertas Beers
+  let beers = 0;
+  if (!isGestor) {
+    const ps = await sb(`farmabot_pacientes?ubs_nome=eq.${enc(U.ubs)}&select=medicamentos`);
+    (ps||[]).forEach(p=>(p.medicamentos||[]).forEach(m=>{ if(m.beers_alerta) beers++; }));
+  }
+
+  const cards = isGestor ? [
+    {cl:'',lbl:'Farmacêuticos ativos',num:Array.isArray(users)?users.length:0,sub:'no sistema'},
+    {cl:'',lbl:'Pacientes monitorados',num:Array.isArray(pacs)?pacs.length:0,sub:'com lembretes'},
+    {cl:'r',lbl:'Conversas pendentes',num:Array.isArray(convs)?convs.length:0,sub:'aguardando resposta'},
+  ] : [
+    {cl:'',lbl:'Meus pacientes',num:Array.isArray(pacs)?pacs.length:0,sub:'cadastrados'},
+    {cl:'r',lbl:'Conversas pendentes',num:Array.isArray(convs)?convs.length:0,sub:'aguardando resposta'},
+    {cl:'a',lbl:'Alertas Beers',num:beers,sub:'medicamentos sinalizados'},
+  ];
+
+  document.getElementById('main-content').innerHTML = `
+    <div class="sec-titulo">📊 ${isGestor ? 'Visão geral — DAF' : `Olá, ${U.nome.split(' ')[0]}!`}</div>
+    <div class="dash-grid">${cards.map(c=>`<div class="dc ${c.cl}"><div class="dc-lbl">${c.lbl}</div><div class="dc-num">${c.num}</div><div class="dc-sub">${c.sub}</div></div>`).join('')}</div>
+    ${!isGestor ? `<div class="card"><div class="card-tit">⚡ Ações rápidas</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button class="btn btn-v" onclick="irSecao('pacientes')">👥 Ver pacientes</button>
+        <button class="btn btn-az" onclick="irSecao('conversas')">💬 Ver conversas</button>
+        <button class="btn btn-am" onclick="abrirCadastrarPaciente()">➕ Novo paciente</button>
+      </div></div>` : `<div class="card"><div class="card-tit">⚡ Ações rápidas</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button class="btn btn-v" onclick="irSecao('ubs')">🏥 Gerenciar UBSs</button>
+        <button class="btn btn-ro" onclick="irSecao('farmaceuticos')">👩‍⚕️ Farmacêuticos</button>
+        <button class="btn btn-az" onclick="irSecao('conversas-gestor')">💬 Ver conversas</button>
+      </div></div>`}
+  `;
+  atualizarBadgeConv(Array.isArray(convs)?convs.length:0);
+}
+
+// ── UBSs (GESTOR) ──
+async function renderUbs() {
+  const ubs = await fetchUbs();
+  document.getElementById('main-content').innerHTML = `
+    <div class="sec-titulo">🏥 UBSs cadastradas</div>
+    <div class="two-col">
+      <div class="card">
+        <div class="card-tit">Cadastrar nova UBS</div>
+        <div class="fg"><label class="lbl">Nome da UBS</label><input class="inp" id="u-nome" placeholder="Ex: ESF JARDIM TAMAREIRAS - 305"></div>
+        <div class="fg"><label class="lbl">Phone Number ID (Meta)</label><input class="inp" id="u-pid" placeholder="Ex: 1250492738136626"></div>
+        <div class="fg"><label class="lbl">Número WhatsApp</label><input class="inp" id="u-num" placeholder="62 9410-3358"></div>
+        <div class="fg"><label class="lbl">Display Name</label><input class="inp" id="u-dn" placeholder="Assistência Farmacêutica Trindade"></div>
+        <button class="btn btn-v btn-full" onclick="cadastrarUbs(this)">Cadastrar UBS</button>
+      </div>
+      <div class="card">
+        <div class="card-tit">UBSs ativas <span class="badge bv" id="total-ubs">${ubs.length}</span></div>
+        <div id="lista-ubs">${renderListaUbs(ubs)}</div>
+      </div>
+    </div>`;
+}
+
+function renderListaUbs(ubs) {
+  if (!ubs.length) return '<div class="vazia"><em>🏥</em>Nenhuma UBS cadastrada</div>';
+  return ubs.map(u=>`<div class="il">
+    <div class="av av-v">🏥</div>
+    <div class="ii"><div class="in">${u.nome_ubs}</div><div class="is">${u.numero_whatsapp||'—'} · ID: ${u.phone_number_id}</div></div>
+    <span class="badge bv">ativa</span>
+  </div>`).join('');
+}
+
+async function fetchUbs() {
+  try {
+    const d = await fetch(`${BACKEND}/admin/ubs`,{headers:{'x-admin-token':AT}});
+    const j = await d.json();
+    return j.ubs||[];
+  } catch { return []; }
+}
+
+async function cadastrarUbs(btn) {
+  const nome = document.getElementById('u-nome').value.trim().toUpperCase();
+  const pid = document.getElementById('u-pid').value.trim();
+  const num = document.getElementById('u-num').value.trim();
+  const dn = document.getElementById('u-dn').value.trim();
+  if (!nome) { toast('Nome é obrigatório','err'); return; }
+  setBtnLoad(btn, true);
+  try {
+    const r = await fetch(`${BACKEND}/admin/ubs`,{method:'POST',headers:{'Content-Type':'application/json','x-admin-token':AT},body:JSON.stringify({nome_ubs:nome,phone_number_id:pid,numero_whatsapp:num,display_name:dn})});
+    const d = await r.json();
+    if (d.ok) { toast('✅ UBS cadastrada!'); renderUbs(); }
+    else toast(d.erro||'Erro','err');
+  } catch { toast('Erro de conexão','err'); }
+  setBtnLoad(btn, false);
+}
+
+// ── FARMACÊUTICOS (GESTOR) ──
+async function renderFarmaceuticos() {
+  const [farms, ubs] = await Promise.all([
+    sb('farmabot_usuarios?perfil=eq.farmaceutico&order=nome.asc'),
+    fetchUbs()
+  ]);
+  const lista = Array.isArray(farms) ? farms : [];
+  document.getElementById('main-content').innerHTML = `
+    <div class="sec-titulo">👩‍⚕️ Farmacêuticos</div>
+    <div class="two-col">
+      <div class="card">
+        <div class="card-tit">Cadastrar farmacêutico</div>
+        <div class="fg"><label class="lbl">Nome completo</label><input class="inp" id="f-nome" placeholder="Ex: Janayna Oliveira"></div>
+        <div class="fg"><label class="lbl">CPF (login)</label><input class="inp" id="f-cpf" placeholder="00000000000" maxlength="11" oninput="this.value=this.value.replace(/\D/g,'')"></div>
+        <div class="fg"><label class="lbl">Senha provisória</label><input class="inp" id="f-senha" placeholder="Ex: Farm@2026"></div>
+        <div class="fg"><label class="lbl">CRF</label><input class="inp" id="f-crf" placeholder="Ex: CRF-GO 12345"></div>
+        <div class="fg"><label class="lbl">UBS vinculada</label>
+          <select class="inp" id="f-ubs">
+            <option value="">— Selecione —</option>
+            ${ubs.map(u=>`<option value="${u.nome_ubs}">${u.nome_ubs}</option>`).join('')}
+          </select>
+        </div>
+        <button class="btn btn-v btn-full" onclick="cadastrarFarm(this)">Cadastrar</button>
+      </div>
+      <div class="card">
+        <div class="card-tit">Farmacêuticos <span class="badge bv">${lista.length}</span></div>
+        <div id="lista-farms">${renderListaFarms(lista, ubs)}</div>
+      </div>
+    </div>`;
+}
+
+function renderListaFarms(lista) {
+  if (!lista.length) return '<div class="vazia"><em>👩‍⚕️</em>Nenhum farmacêutico cadastrado</div>';
+  return lista.map(f=>{
+    const ativo = f.ativo !== false;
+    const ini = (f.nome||'?').split(' ').slice(0,2).map(w=>w[0]).join('').toUpperCase();
+    return `<div class="il" style="opacity:${ativo?1:.6}">
+      <div class="av av-ro">${ini}</div>
+      <div class="ii"><div class="in">${f.nome}</div><div class="is">${f.ubs||'—'} · ${f.crf||'sem CRF'} · CPF: ${f.id}</div></div>
+      <div class="ia">
+        <span class="badge ${ativo?'bv':'bc'}">${ativo?'ativo':'inativo'}</span>
+        <button class="btn btn-az btn-sm" onclick='editarFarm(${JSON.stringify(f)})'>✏️</button>
+        <button class="btn btn-am btn-sm" onclick="resetarSenhaFarm('${f.id}','${f.nome}')">🔑</button>
+        <button class="btn ${ativo?'btn-ve':'btn-v'} btn-sm" onclick="toggleFarm('${f.id}','${f.nome}',${ativo})">${ativo?'⊘':'✓'}</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function cadastrarFarm(btn) {
+  const nome=document.getElementById('f-nome').value.trim();
+  const cpf=document.getElementById('f-cpf').value.trim();
+  const senha=document.getElementById('f-senha').value.trim();
+  const crf=document.getElementById('f-crf').value.trim();
+  const ubs=document.getElementById('f-ubs').value;
+  if (!nome||!cpf||!senha||!ubs){toast('Nome, CPF, senha e UBS são obrigatórios','err');return;}
+  if (cpf.length!==11){toast('CPF deve ter 11 dígitos','err');return;}
+  setBtnLoad(btn,true);
+  try {
+    const existe = await sb(`farmabot_usuarios?id=eq.${cpf}&select=id`);
+    if (existe?.length){toast('CPF já cadastrado','err');setBtnLoad(btn,false);return;}
+    const d = await sb('farmabot_usuarios',{method:'POST',body:JSON.stringify({id:cpf,nome,senha,cargo:'Farmacêutico(a)',perfil:'farmaceutico',ubs,crf:crf||null,ativo:true,senha_provisoria:true})});
+    if (!d?.message){toast('✅ Farmacêutico cadastrado!');renderFarmaceuticos();}
+    else toast(d.message||'Erro','err');
+  } catch{toast('Erro de conexão','err');}
+  setBtnLoad(btn,false);
+}
+
+function editarFarm(f) {
+  fetchUbs().then(ubs=>{
+    abrirModal(`Editar: ${f.nome}`,`
+      <div class="fg"><label class="lbl">Nome</label><input class="inp" id="ef-nome" value="${f.nome}"></div>
+      <div class="fg"><label class="lbl">CRF</label><input class="inp" id="ef-crf" value="${f.crf||''}"></div>
+      <div class="fg"><label class="lbl">UBS</label><select class="inp" id="ef-ubs">${ubs.map(u=>`<option value="${u.nome_ubs}"${u.nome_ubs===f.ubs?' selected':''}>${u.nome_ubs}</option>`).join('')}</select></div>
+      <div class="modal-acoes">
+        <button class="btn btn-c" onclick="fecharModal()">Cancelar</button>
+        <button class="btn btn-v" onclick="salvarFarm('${f.id}')">Salvar</button>
+      </div>`);
+  });
+}
+
+async function salvarFarm(id) {
+  const nome=document.getElementById('ef-nome').value.trim();
+  const crf=document.getElementById('ef-crf').value.trim();
+  const ubs=document.getElementById('ef-ubs').value;
+  await sb(`farmabot_usuarios?id=eq.${id}`,{method:'PATCH',body:JSON.stringify({nome,crf:crf||null,ubs})});
+  toast('✅ Dados atualizados!');fecharModal();renderFarmaceuticos();
+}
+
+function resetarSenhaFarm(id, nome) {
+  const nova='Farm@'+Math.floor(1000+Math.random()*9000);
+  abrirModal('Resetar senha',`
+    <p style="margin-bottom:14px">Nova senha provisória para <strong>${nome}</strong>:</p>
+    <div style="background:var(--ambar-bg);border:1.5px solid var(--ambar-borda);border-radius:8px;padding:14px;text-align:center;font-size:22px;font-weight:800;color:var(--ambar);letter-spacing:2px;font-family:monospace">${nova}</div>
+    <p style="font-size:12px;color:var(--texto-sec);margin-top:10px">Anote e informe ao farmacêutico.</p>
+    <div class="modal-acoes">
+      <button class="btn btn-c" onclick="fecharModal()">Cancelar</button>
+      <button class="btn btn-v" onclick="confirmarResetFarm('${id}','${nova}')">Confirmar reset</button>
+    </div>`);
+}
+
+async function confirmarResetFarm(id,nova) {
+  await sb(`farmabot_usuarios?id=eq.${id}`,{method:'PATCH',body:JSON.stringify({senha:nova,senha_provisoria:true})});
+  toast('✅ Senha resetada!');fecharModal();
+}
+
+async function toggleFarm(id,nome,ativo) {
+  await sb(`farmabot_usuarios?id=eq.${id}`,{method:'PATCH',body:JSON.stringify({ativo:!ativo})});
+  toast(ativo?'⊘ Acesso desativado':'✅ Farmacêutico reativado');renderFarmaceuticos();
+}
+
+// ── PACIENTES (FARMACÊUTICO) ──
+async function renderPacientes() {
+  const pacs = await sb(`farmabot_pacientes?ubs_nome=eq.${enc(U.ubs)}&order=nome.asc`);
+  const lista = Array.isArray(pacs) ? pacs : [];
+  document.getElementById('main-content').innerHTML = `
+    <div class="sec-titulo" style="justify-content:space-between">
+      <span>👥 Meus pacientes</span>
+      <button class="btn btn-v" onclick="abrirCadastrarPaciente()">➕ Novo paciente</button>
+    </div>
+    <div class="card">
+      <div id="lista-pacientes">${renderListaPac(lista)}</div>
+    </div>`;
+}
+
+function renderListaPac(lista) {
+  if (!lista.length) return '<div class="vazia"><em>👥</em>Nenhum paciente cadastrado.<br><button class="btn btn-v" style="margin-top:12px" onclick="abrirCadastrarPaciente()">➕ Cadastrar primeiro paciente</button></div>';
+  return lista.map(p=>{
+    const meds = (p.medicamentos||[]);
+    const temBeers = meds.some(m=>m.beers_alerta);
+    const ini = (p.nome||'?').split(' ').slice(0,2).map(w=>w[0]).join('').toUpperCase();
+    return `<div class="il">
+      <div class="av ${temBeers?'av-r':'av-v'}">${ini}</div>
+      <div class="ii">
+        <div class="in">${p.nome} ${temBeers?'<span class="badge br">⚠ Beers</span>':''}</div>
+        <div class="is">${p.idade||'?'} anos · ${p.telefone||'—'} · ${meds.length} medicamento(s)</div>
+      </div>
+      <div class="ia">
+        <button class="btn btn-az btn-sm" onclick='verPaciente(${JSON.stringify(p).replace(/'/g,"&#39;")})'>Ver</button>
+        <button class="btn btn-am btn-sm" onclick='editarPaciente(${JSON.stringify(p).replace(/'/g,"&#39;")})'>✏️</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function abrirCadastrarPaciente() {
+  abrirModal('Novo paciente',`
+    <div class="fg"><label class="lbl">Nome completo</label><input class="inp" id="np-nome" placeholder="Nome completo"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div class="fg"><label class="lbl">CPF</label><input class="inp" id="np-cpf" placeholder="00000000000" maxlength="11" oninput="this.value=this.value.replace(/\D/g,'')"></div>
+      <div class="fg"><label class="lbl">Data de nascimento</label><input class="inp" type="date" id="np-nasc"></div>
+    </div>
+    <div class="fg"><label class="lbl">Telefone WhatsApp</label><input class="inp" id="np-tel" placeholder="62985816375" oninput="this.value=this.value.replace(/\D/g,'')"></div>
+    <div class="fg"><label class="lbl">Condições (HAS, DM, etc.)</label>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px" id="cond-chips"></div>
+      <div style="display:flex;gap:6px">
+        <input class="inp" id="np-cond" placeholder="Adicionar condição" style="flex:1" onkeydown="if(event.key==='Enter'){addCond();event.preventDefault()}">
+        <button class="btn btn-c btn-sm" onclick="addCond()">+</button>
+      </div>
+    </div>
+    <div class="modal-acoes">
+      <button class="btn btn-c" onclick="fecharModal()">Cancelar</button>
+      <button class="btn btn-v" onclick="salvarNovoPaciente(this)">Salvar paciente</button>
+    </div>`);
+}
+
+let condsTemp = [];
+function addCond() {
+  const inp = document.getElementById('np-cond');
+  const v = inp.value.trim().toUpperCase();
+  if (!v) return;
+  condsTemp.push(v);
+  inp.value = '';
+  renderCondsChips();
+}
+function renderCondsChips() {
+  document.getElementById('cond-chips').innerHTML = condsTemp.map((c,i)=>
+    `<span class="med-chip">${c} <span onclick="condsTemp.splice(${i},1);renderCondsChips()" style="cursor:pointer;margin-left:2px">×</span></span>`
+  ).join('');
+}
+
+async function salvarNovoPaciente(btn) {
+  const nome=document.getElementById('np-nome').value.trim();
+  const cpf=document.getElementById('np-cpf').value.trim();
+  const nasc=document.getElementById('np-nasc').value;
+  const tel=document.getElementById('np-tel').value.trim();
+  if (!nome||!tel){toast('Nome e telefone são obrigatórios','err');return;}
+  setBtnLoad(btn,true);
+  const idade = nasc ? Math.floor((Date.now()-new Date(nasc))/(365.25*24*3600*1000)) : null;
+  try {
+    const d = await sb('farmabot_pacientes',{method:'POST',body:JSON.stringify({
+      nome,cpf:cpf||null,data_nascimento:nasc||null,idade,telefone:tel,
+      ubs_nome:U.ubs,ubs_id:U.id,condicoes:condsTemp,medicamentos:[]
+    })});
+    if (!d?.message){toast('✅ Paciente cadastrado!');fecharModal();condsTemp=[];renderPacientes();}
+    else toast(d.message||'Erro','err');
+  } catch{toast('Erro','err');}
+  setBtnLoad(btn,false);
+}
+
+function verPaciente(p) {
+  const meds = p.medicamentos||[];
+  abrirModal(`👤 ${p.nome}`,`
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px;font-size:13px">
+      <div><span style="color:var(--texto-sec)">Idade:</span> ${p.idade||'?'} anos</div>
+      <div><span style="color:var(--texto-sec)">Telefone:</span> ${p.telefone||'—'}</div>
+      <div><span style="color:var(--texto-sec)">CPF:</span> ${p.cpf||'—'}</div>
+      <div><span style="color:var(--texto-sec)">UBS:</span> ${p.ubs_nome||'—'}</div>
+    </div>
+    <div style="margin-bottom:10px"><strong>Condições:</strong> ${(p.condicoes||[]).map(c=>`<span class="med-chip">${c}</span>`).join('')||'—'}</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+      <strong>Medicamentos (${meds.length})</strong>
+      <button class="btn btn-v btn-sm" onclick='abrirAddMed(${JSON.stringify(p).replace(/'/g,"&#39;")})'>➕ Adicionar</button>
+    </div>
+    <div id="meds-lista">${renderMedsList(meds)}</div>
+    <div class="modal-acoes"><button class="btn btn-c" onclick="fecharModal()">Fechar</button></div>`);
+}
+
+function renderMedsList(meds) {
+  if (!meds.length) return '<div class="vazia" style="padding:16px"><em>💊</em>Nenhum medicamento</div>';
+  return meds.map((m,i)=>`
+    <div style="border:1px solid var(--borda);border-radius:8px;padding:10px;margin-bottom:8px;${m.beers_alerta?'border-color:var(--vermelho-borda);background:var(--vermelho-bg)':''}">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start">
+        <div>
+          <strong>${m.nome}</strong> ${m.beers_alerta?'<span class="badge br">⚠ Beers</span>':''}
+          <div style="font-size:12px;color:var(--texto-sec)">${m.dose||'—'} · ${(m.horarios||[]).join(', ')||'—'}</div>
+          ${m.beers_alerta?`<div style="font-size:11px;color:var(--vermelho);margin-top:4px">${m.beers_motivo||''}</div>`:''}
+        </div>
+      </div>
+    </div>`).join('');
+}
+
+async function abrirAddMed(p) {
+  abrirModal(`💊 Adicionar medicamento — ${p.nome}`,`
+    <div class="fg"><label class="lbl">Nome do medicamento</label>
+      <input class="inp" id="am-nome" placeholder="Ex: Metformina" oninput="debounceBeers(this.value,'${p.id}')">
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div class="fg"><label class="lbl">Dose</label><input class="inp" id="am-dose" placeholder="Ex: 500mg"></div>
+      <div class="fg"><label class="lbl">Frequência</label>
+        <select class="inp" id="am-freq">
+          <option>1x ao dia</option><option>2x ao dia</option><option>3x ao dia</option>
+          <option>De 8 em 8h</option><option>De 12 em 12h</option><option>Em jejum</option>
+          <option>Antes do almoço</option><option>Após o jantar</option>
+        </select>
+      </div>
+    </div>
+    <div id="beers-resultado"></div>
+    <div class="modal-acoes">
+      <button class="btn btn-c" onclick="verPaciente(${JSON.stringify(p).replace(/'/g,"&#39;")})">Voltar</button>
+      <button class="btn btn-v" id="btn-salvar-med" onclick='salvarMed(${JSON.stringify(p).replace(/'/g,"&#39;")})'>Salvar medicamento</button>
+    </div>`);
+}
+
+let beersTimer = null;
+function debounceBeers(val, pacId) {
+  clearTimeout(beersTimer);
+  if (val.length < 3) { document.getElementById('beers-resultado').innerHTML = ''; return; }
+  document.getElementById('beers-resultado').innerHTML = '<div style="font-size:12px;color:var(--texto-ter);margin-top:8px">🔍 Verificando Lista Beers...</div>';
+  beersTimer = setTimeout(()=>verificarBeers(val, pacId), 600);
+}
+
+async function verificarBeers(nomeMed, pacId) {
+  const el = document.getElementById('beers-resultado');
+  if (!el) return;
+  try {
+    // Busca na FDA API (OpenFDA)
+    const query = encodeURIComponent(nomeMed);
+    const r = await fetch(`https://api.fda.gov/drug/label.json?search=generic_name:"${query}"+OR+brand_name:"${query}"&limit=1`);
+    const d = await r.json();
+    const resultado = d.results?.[0];
+    let html = '';
+
+    if (resultado) {
+      // Checa warnings para idosos
+      const warnings = (resultado.warnings_and_cautions||resultado.warnings||[]).join(' ').toLowerCase();
+      const elderly = warnings.includes('elderly') || warnings.includes('older adult') || warnings.includes('geriatric');
+
+      // Lista Beers simplificada (medicamentos mais comuns)
+      const beersLista = {
+        'amiodarona':  'Alto risco cardíaco em idosos (Lista Beers)',
+        'digoxina':    'Risco de toxicidade aumentado em idosos — evitar >0,125mg/dia',
+        'nifedipino':  'Hipotensão e risco de fraturas em idosos (Beers)',
+        'amitriptilina':'Anticolinérgico — confusão e risco de quedas em idosos',
+        'clonazepam':  'Benzodiazepínico — sedação excessiva e quedas em idosos',
+        'diazepam':    'Benzodiazepínico — sedação excessiva e quedas em idosos',
+        'alprazolam':  'Benzodiazepínico — sedação excessiva e quedas em idosos',
+        'zolpidem':    'Hipnótico — risco de quedas e fraturas em idosos',
+        'haloperidol': 'Antipsicótico — risco aumentado de AVC e morte em idosos',
+        'prometazina': 'Anticolinérgico — não recomendado em idosos (Beers)',
+        'indometacina':'AINE — risco GI e renal elevado em idosos',
+        'piroxicam':   'AINE — risco GI e renal elevado em idosos',
+        'metoclopramida':'Risco de sintomas extrapiramidais em idosos',
+        'cimetidina':  'Anticolinérgico — confusão em idosos',
+        'doxazosina':  'Hipotensão ortostática e risco de quedas',
+        'glibenclamida':'Hipoglicemia prolongada em idosos (preferir glicazida)',
+      };
+
+      const nomeLower = nomeMed.toLowerCase();
+      const beersMatch = Object.entries(beersLista).find(([k])=>nomeLower.includes(k));
+
+      if (beersMatch) {
+        html += `<div class="beers-box"><div class="beers-tit">🚨 Alerta Lista Beers — AGS 2023</div>
+          <div class="beers-li">${beersMatch[1]}</div>
+          <div class="beers-li">Considere alternativa mais segura para idosos.</div></div>`;
+        // Marca para salvar
+        window._beersAlerta = { alerta: true, motivo: beersMatch[1] };
+      } else if (elderly) {
+        html += `<div class="beers-box"><div class="beers-tit">⚠️ Cautela em idosos (FDA)</div>
+          <div class="beers-li">A bula da FDA menciona precauções para pacientes idosos.</div></div>`;
+        window._beersAlerta = { alerta: true, motivo: 'Cautela em idosos — FDA' };
+      } else {
+        html += `<div style="background:var(--verde-bg);border:1px solid var(--verde-borda);border-radius:8px;padding:10px;margin-top:8px;font-size:12px;color:var(--verde)">✅ Não encontrado na Lista Beers</div>`;
+        window._beersAlerta = { alerta: false, motivo: null };
+      }
+
+      // Busca interações com medicamentos já cadastrados do paciente
+      if (pacId) {
+        const pac = await sb(`farmabot_pacientes?id=eq.${pacId}&select=medicamentos`);
+        const medsExistentes = pac?.[0]?.medicamentos||[];
+        if (medsExistentes.length > 0) {
+          const interacoes = checarInteracoes(nomeLower, medsExistentes.map(m=>m.nome.toLowerCase()));
+          if (interacoes.length) {
+            html += `<div class="interacao-box"><div class="interacao-tit">⚠️ Possíveis interações medicamentosas</div>
+              ${interacoes.map(i=>`<div class="interacao-li">${i}</div>`).join('')}</div>`;
+          }
+        }
+      }
+    } else {
+      html = `<div style="font-size:12px;color:var(--texto-ter);margin-top:8px">Medicamento não encontrado na base FDA. Verifique o nome ou consulte referência clínica.</div>`;
+      window._beersAlerta = { alerta: false, motivo: null };
+    }
+    el.innerHTML = html;
+  } catch(e) {
+    el.innerHTML = `<div style="font-size:12px;color:var(--texto-ter);margin-top:8px">⚠️ Não foi possível verificar agora. Salve e confira manualmente.</div>`;
+    window._beersAlerta = { alerta: false, motivo: null };
+  }
+}
+
+function checarInteracoes(novo, existentes) {
+  const interacoesConhecidas = [
+    {a:'varfarina',b:['aspirina','ibuprofeno','naproxeno'],msg:'Risco aumentado de sangramento'},
+    {a:'metformina',b:['contraste iodado'],msg:'Risco de acidose lática — suspender antes de contraste'},
+    {a:'digoxina',b:['amiodarona','claritromicina','azitromicina'],msg:'Aumenta nível sérico da digoxina — risco de toxicidade'},
+    {a:'sinvastatina',b:['amiodarona','fluconazol'],msg:'Risco de miopatia / rabdomiólise'},
+    {a:'captopril',b:['enalapril','losartana','valsartana'],msg:'Duplo bloqueio do RAAS — hipercalemia e lesão renal'},
+    {a:'clonazepam',b:['alprazolam','diazepam','zolpidem'],msg:'Dupla sedação — risco de quedas e depressão respiratória'},
+    {a:'amiodarona',b:['digoxina','sinvastatina'],msg:'Interação significativa — monitorar'},
+    {a:'fluconazol',b:['varfarina','sinvastatina'],msg:'Inibe CYP2C9/3A4 — potencializa efeito'},
+  ];
+  const alertas = [];
+  interacoesConhecidas.forEach(({a,b,msg})=>{
+    const match = (novo.includes(a) && existentes.some(e=>b.some(bi=>e.includes(bi)))) ||
+                  (b.some(bi=>novo.includes(bi)) && existentes.some(e=>e.includes(a)));
+    if (match) alertas.push(`${msg}`);
+  });
+  return alertas;
+}
+
+async function salvarMed(p) {
+  const nome=document.getElementById('am-nome').value.trim();
+  const dose=document.getElementById('am-dose').value.trim();
+  const freq=document.getElementById('am-freq').value;
+  if (!nome){toast('Informe o medicamento','err');return;}
+  const novoMed = { nome, dose, horarios:[freq], beers_alerta: window._beersAlerta?.alerta||false, beers_motivo: window._beersAlerta?.motivo||null };
+  const meds = [...(p.medicamentos||[]), novoMed];
+  try {
+    await sb(`farmabot_pacientes?id=eq.${p.id}`,{method:'PATCH',body:JSON.stringify({medicamentos:meds})});
+    toast('✅ Medicamento salvo!');
+    window._beersAlerta = null;
+    fecharModal();
+    renderPacientes();
+  } catch{toast('Erro ao salvar','err');}
+}
+
+function editarPaciente(p) {
+  abrirModal(`Editar: ${p.nome}`,`
+    <div class="fg"><label class="lbl">Nome</label><input class="inp" id="ep-nome" value="${p.nome}"></div>
+    <div class="fg"><label class="lbl">Telefone</label><input class="inp" id="ep-tel" value="${p.telefone||''}"></div>
+    <div class="fg"><label class="lbl">Idade</label><input class="inp" type="number" id="ep-idade" value="${p.idade||''}"></div>
+    <div class="modal-acoes">
+      <button class="btn btn-c" onclick="fecharModal()">Cancelar</button>
+      <button class="btn btn-v" onclick="salvarEditPac('${p.id}')">Salvar</button>
+    </div>`);
+}
+
+async function salvarEditPac(id) {
+  const nome=document.getElementById('ep-nome').value.trim();
+  const tel=document.getElementById('ep-tel').value.trim();
+  const idade=parseInt(document.getElementById('ep-idade').value)||null;
+  await sb(`farmabot_pacientes?id=eq.${id}`,{method:'PATCH',body:JSON.stringify({nome,telefone:tel,idade})});
+  toast('✅ Paciente atualizado!');fecharModal();renderPacientes();
+}
+
+// ── CONVERSAS ──
+async function renderConversas(isGestor) {
+  const path = isGestor
+    ? 'farmabot_conversas?order=hora.desc&limit=50'
+    : `farmabot_conversas?unidade=eq.${enc(U.ubs)}&order=hora.desc&limit=50`;
+  const data = await sb(path);
+  const lista = Array.isArray(data)?data:[];
+  const pendentes = lista.filter(c=>c.pendente);
+
+  document.getElementById('main-content').innerHTML = `
+    <div class="sec-titulo" style="justify-content:space-between">
+      <span>💬 Conversas</span>
+      <button class="btn btn-c btn-sm" onclick="irSecao('${isGestor?'conversas-gestor':'conversas'}')">↻ Atualizar</button>
+    </div>
+    <div class="tabs">
+      <button class="tab ativa" id="tab-pend" onclick="filtrarConversas('pendentes')">⏳ Pendentes <span class="nav-badge r">${pendentes.length}</span></button>
+      <button class="tab" id="tab-todas" onclick="filtrarConversas('todas')">Todas (${lista.length})</button>
+    </div>
+    <div id="conv-lista">${renderConvLista(pendentes, isGestor)}</div>`;
+
+  window._convTodas = lista;
+  window._convPend = pendentes;
+  window._convIsGestor = isGestor;
+  atualizarBadgeConv(pendentes.length);
+}
+
+function filtrarConversas(tipo) {
+  document.getElementById('tab-pend').classList.toggle('ativa', tipo==='pendentes');
+  document.getElementById('tab-todas').classList.toggle('ativa', tipo==='todas');
+  const lista = tipo==='pendentes' ? window._convPend : window._convTodas;
+  document.getElementById('conv-lista').innerHTML = renderConvLista(lista, window._convIsGestor);
+}
+
+function renderConvLista(lista, isGestor) {
+  if (!lista.length) return '<div class="vazia"><em>✅</em>Nenhuma conversa aqui</div>';
+  return lista.map(c=>{
+    const ini=(c.paciente||'?').split(' ').slice(0,2).map(w=>w[0]).join('').toUpperCase();
+    const ultMsg=(c.msgs||[]).filter(m=>m.tipo==='paciente').slice(-1)[0];
+    return `<div class="conv-item" id="ci-${c.id}">
+      <div class="conv-header" onclick="toggleConv('${c.id}')">
+        <div class="av av-v">${ini}</div>
+        <div class="conv-info">
+          <div class="conv-nome">${c.paciente||c.numero||'—'} ${isGestor?`<span style="font-size:11px;color:var(--texto-ter)">· ${c.unidade||'—'}</span>`:''}</div>
+          <div class="conv-sub">${ultMsg?.texto||'Sem mensagens'}</div>
+        </div>
+        <div class="conv-meta">
+          <span class="badge ${c.pendente?'ba':'bv'}">${c.pendente?'⏳ pendente':'✅ resolvida'}</span>
+          <span style="font-size:11px;color:var(--texto-ter)">${c.hora||''}</span>
+        </div>
+      </div>
+      <div class="conv-chat">
+        <div class="msgs" id="msgs-${c.id}">${renderMsgsChat(c.msgs||[])}</div>
+        ${c.pendente && !isGestor ? `
+        <div class="resp-area">
+          <textarea class="resp-inp" id="resp-${c.id}" placeholder="Responda ao paciente..." rows="2"></textarea>
+          <button class="btn-enviar" onclick="enviarResp('${c.id}','${c.numero}')">Enviar ✈️</button>
+        </div>
+        <button class="btn-resolver-txt" onclick="resolverConv('${c.id}')">Marcar como resolvida sem responder</button>
+        ` : c.pendente && isGestor ? `<p style="font-size:12px;color:var(--texto-sec);text-align:center;padding:6px">Acompanhamento do gestor — resposta pelo painel do farmacêutico</p>` : `<p style="font-size:12px;color:var(--texto-sec);text-align:center;padding:6px">✅ Conversa resolvida</p>`}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderMsgsChat(msgs) {
+  return msgs.map(m=>{
+    const tipo = m.tipo==='farmaceutico'?'farmaceutico':m.tipo==='bot'?'bot':'paciente';
+    const label = tipo==='farmaceutico'?'👩‍⚕️ Farmacêutico':tipo==='bot'?'🤖 Bot':'👤 Paciente';
+    return `<div class="msg ${tipo}">
+      <div class="msg-tipo">${label}</div>
+      ${(m.texto||'').replace(/\n/g,'<br>').replace(/\*(.*?)\*/g,'<strong>$1</strong>')}
+      <div class="msg-meta">${m.hora||''}</div>
+    </div>`;
+  }).join('');
+}
+
+function toggleConv(id) {
+  const el=document.getElementById(`ci-${id}`);
+  const era=el.classList.contains('aberta');
+  document.querySelectorAll('.conv-item.aberta').forEach(e=>e.classList.remove('aberta'));
+  if (!era) {
+    el.classList.add('aberta');
+    setTimeout(()=>{const m=document.getElementById(`msgs-${id}`);if(m)m.scrollTop=m.scrollHeight;},80);
+  }
+}
+
+async function enviarResp(convId, numPac) {
+  const ta=document.getElementById(`resp-${convId}`);
+  const msg=ta?.value?.trim();
+  if (!msg){toast('Digite uma mensagem','err');return;}
+  const btn=ta.parentElement.querySelector('.btn-enviar');
+  const orig=btn.innerHTML;
+  btn.innerHTML='<span class="spin"></span>';btn.disabled=true;
+  try {
+    const r=await fetch(`${BACKEND}/responder`,{method:'POST',headers:{'Content-Type':'application/json','x-admin-token':AT},body:JSON.stringify({conversa_id:convId,numero_paciente:numPac,mensagem:msg,nome_farmaceutico:U.nome,nome_ubs:U.ubs})});
+    const d=await r.json();
+    if(d.ok){toast('✅ Mensagem enviada!');irSecao('conversas');}
+    else{toast(d.erro||'Erro','err');btn.innerHTML=orig;btn.disabled=false;}
+  } catch{toast('Erro de conexão','err');btn.innerHTML=orig;btn.disabled=false;}
+}
+
+async function resolverConv(id) {
+  await sb(`farmabot_conversas?id=eq.${id}`,{method:'PATCH',body:JSON.stringify({pendente:false})});
+  toast('✅ Conversa resolvida');irSecao('conversas');
+}
+
+// ── HELPERS ──
+function enc(v){return encodeURIComponent(v||'');}
+
+function atualizarBadgeConv(n) {
+  ['badge-conv','badge-conversas-gestor'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(el){el.textContent=n;el.style.display=n>0?'':'none';}
+  });
+  const nw=document.getElementById('notif-wrap');
+  const nn=document.getElementById('notif-num');
+  if(nw&&nn){nw.style.display=n>0?'block':'none';nn.textContent=n;}
+}
+
+async function verificarPendencias() {
+  try {
+    const path = U.perfil==='gestor'
+      ? 'farmabot_conversas?pendente=eq.true&select=id'
+      : `farmabot_conversas?unidade=eq.${enc(U.ubs)}&pendente=eq.true&select=id`;
+    const d=await sb(path);
+    atualizarBadgeConv(Array.isArray(d)?d.length:0);
+  } catch{}
+}
+
+function abrirModal(titulo, html) {
+  document.getElementById('modal-body').innerHTML=`<div class="modal-tit">${titulo}</div>${html}`;
+  document.getElementById('overlay').classList.add('aberto');
+}
+function fecharModal(){document.getElementById('overlay').classList.remove('aberto');}
+document.getElementById('overlay').addEventListener('click',function(e){if(e.target===this)fecharModal();});
+
+function setBtnLoad(btn, loading) {
+  if(loading){btn._orig=btn.innerHTML;btn.innerHTML='<span class="spin"></span> Salvando...';btn.disabled=true;}
+  else{btn.innerHTML=btn._orig||btn.innerHTML;btn.disabled=false;}
+}
+
+function toast(msg,tipo='ok'){
+  const t=document.getElementById('toast');
+  t.textContent=msg;t.className=`show ${tipo}`;
+  setTimeout(()=>t.className='',3000);
+}
+</script>
+</body>
+</html>
