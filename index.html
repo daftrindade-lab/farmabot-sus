@@ -627,6 +627,7 @@ async function salvarNovoPaciente(btn) {
 
 function verPaciente(p) {
   const meds = p.medicamentos||[];
+  const temBeers = meds.filter(m=>m.beers_alerta);
   abrirModal(`👤 ${p.nome}`,`
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px;font-size:13px">
       <div><span style="color:var(--texto-sec)">Idade:</span> ${p.idade||'?'} anos</div>
@@ -635,12 +636,127 @@ function verPaciente(p) {
       <div><span style="color:var(--texto-sec)">UBS:</span> ${p.ubs_nome||'—'}</div>
     </div>
     <div style="margin-bottom:10px"><strong>Condições:</strong> ${(p.condicoes||[]).map(c=>`<span class="med-chip">${c}</span>`).join('')||'—'}</div>
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-      <strong>Medicamentos (${meds.length})</strong>
-      <button class="btn btn-v btn-sm" onclick='abrirAddMed(${JSON.stringify(p).replace(/'/g,"&#39;")})'>➕ Adicionar</button>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;flex-wrap:wrap;gap:8px">
+      <strong>Medicamentos (${meds.length}) ${temBeers.length>0?`<span class="badge br">⚠ ${temBeers.length} Beers</span>`:''}</strong>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <button class="btn btn-ro btn-sm" onclick='analisarPrescricao(${JSON.stringify(p).replace(/'/g,"&#39;")})'>🔍 Analisar prescrição</button>
+        <button class="btn btn-v btn-sm" onclick='abrirAddMed(${JSON.stringify(p).replace(/'/g,"&#39;")})'>➕ Adicionar</button>
+      </div>
     </div>
     <div id="meds-lista">${renderMedsList(meds)}</div>
     <div class="modal-acoes"><button class="btn btn-c" onclick="fecharModal()">Fechar</button></div>`);
+}
+
+async function analisarPrescricao(p) {
+  const meds = p.medicamentos||[];
+  if (meds.length < 2) { toast('Paciente precisa ter pelo menos 2 medicamentos para análise','err'); return; }
+
+  // Monta modal de análise
+  abrirModal(`🔍 Análise de prescrição — ${p.nome}`,`
+    <div style="font-size:12px;color:var(--texto-sec);margin-bottom:14px">
+      ${meds.length} medicamentos · ${p.idade||'?'} anos · ${(p.condicoes||[]).join(', ')||'condições não informadas'}
+    </div>
+    <div id="analise-beers-section"></div>
+    <div id="analise-interacoes-section"></div>
+    <div id="analise-ia-section">
+      <div style="background:var(--roxo-bg);border:1px solid var(--roxo);border-radius:var(--r);padding:14px;margin-top:10px">
+        <div style="font-weight:700;color:var(--roxo);margin-bottom:8px">🤖 Análise clínica por IA</div>
+        <div id="ia-resultado" style="font-size:13px;color:var(--texto-sec)">
+          <button class="btn btn-ro btn-sm" onclick='rodarAnaliseIA(${JSON.stringify(p).replace(/'/g,"&#39;")})'>Gerar análise clínica completa</button>
+        </div>
+      </div>
+    </div>
+    <div style="margin-top:14px;padding:10px;background:var(--cinza-bg);border-radius:var(--r);font-size:12px;color:var(--texto-sec)">
+      🔗 Verificar manualmente:
+      <a href="https://www.drugs.com/interactions-check.php" target="_blank" style="color:var(--azul);font-weight:600">Drugs.com</a> ·
+      <a href="https://reference.medscape.com/drug-interactionchecker" target="_blank" style="color:var(--azul);font-weight:600">Medscape</a>
+    </div>
+    <div class="modal-acoes">
+      <button class="btn btn-c" onclick='verPaciente(${JSON.stringify(p).replace(/'/g,"&#39;")})'>← Voltar</button>
+    </div>`);
+
+  // 1. Alertas Beers dos medicamentos atuais
+  const beersAlertas = meds.filter(m=>m.beers_alerta);
+  const beersEl = document.getElementById('analise-beers-section');
+  if (beersAlertas.length) {
+    beersEl.innerHTML = `
+      <div style="background:var(--vermelho-bg);border:1.5px solid var(--vermelho-borda);border-radius:var(--r);padding:14px;margin-bottom:10px">
+        <div style="font-weight:700;color:var(--vermelho);margin-bottom:8px">🚨 Alertas Lista Beers 2023 (${beersAlertas.length} medicamento(s))</div>
+        ${beersAlertas.map(m=>`
+          <div style="border-top:1px solid var(--vermelho-borda);padding:8px 0;font-size:12px">
+            <strong style="color:var(--vermelho)">${m.nome}</strong>
+            <span class="badge br" style="margin-left:6px">${m.beers_risco||'ALERTA'}</span>
+            <div style="color:var(--vermelho);margin-top:3px">${m.beers_motivo||''}</div>
+          </div>`).join('')}
+      </div>`;
+  } else {
+    beersEl.innerHTML = `<div style="background:var(--verde-bg);border:1px solid var(--verde-borda);border-radius:var(--r);padding:10px;margin-bottom:10px;font-size:12px;color:var(--verde)">✅ Nenhum medicamento na Lista Beers</div>`;
+  }
+
+  // 2. Interações entre todos os medicamentos
+  const nomeMeds = meds.map(m=>m.nome.toUpperCase());
+  const todasInteracoes = [];
+  for (let i=0; i<nomeMeds.length; i++) {
+    const resto = nomeMeds.filter((_,j)=>j!==i);
+    const ints = checarInteracoes(nomeMeds[i], resto);
+    ints.forEach(int=>{ if(!todasInteracoes.includes(int)) todasInteracoes.push(int); });
+  }
+
+  const intEl = document.getElementById('analise-interacoes-section');
+  if (todasInteracoes.length) {
+    intEl.innerHTML = `
+      <div class="interacao-box">
+        <div class="interacao-tit">⚠️ Interações medicamentosas detectadas (${todasInteracoes.length})</div>
+        ${todasInteracoes.map(i=>`<div class="interacao-li">${i}</div>`).join('')}
+      </div>`;
+  } else {
+    intEl.innerHTML = `<div style="background:var(--verde-bg);border:1px solid var(--verde-borda);border-radius:var(--r);padding:10px;margin-bottom:10px;font-size:12px;color:var(--verde)">✅ Nenhuma interação conhecida detectada na base local</div>`;
+  }
+}
+
+async function rodarAnaliseIA(p) {
+  const el = document.getElementById('ia-resultado');
+  if (!el) return;
+  el.innerHTML = '<span class="spin" style="border-color:rgba(79,66,181,.3);border-top-color:var(--roxo)"></span> Analisando prescrição completa...';
+
+  const meds = (p.medicamentos||[]).map(m=>`${m.nome} (${m.dose||'dose não informada'}, ${(m.horarios||[]).join('/')})`).join('; ');
+  const prompt = `Analise a prescrição completa deste paciente e identifique problemas clínicos relevantes:
+
+PACIENTE: ${p.nome}, ${p.idade||'?'} anos
+CONDIÇÕES: ${(p.condicoes||[]).join(', ')||'não informadas'}
+MEDICAMENTOS (${p.medicamentos?.length||0}): ${meds}
+
+Analise considerando:
+1. Critérios de Beers 2023 — medicamentos inapropriados para idosos
+2. STOPP/START v3 — o que revisar e o que iniciar
+3. Interações medicamentosas clinicamente relevantes
+4. Duplicidade terapêutica
+5. Adequação das doses para a idade
+
+Seja objetivo e prático. Use linguagem que um farmacêutico do SUS entenda. Formate com marcadores.`;
+
+  try {
+    const res = await fetch(`${BACKEND}/api/claude`, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 1000,
+        system: 'Você é um farmacêutico clínico especialista em farmácia hospitalar e geriatria. Analise prescrições de forma objetiva e prática para farmacêuticos do SUS.',
+        messages: [{role:'user', content: prompt}]
+      })
+    });
+    const d = await res.json();
+    const texto = d.content?.[0]?.text;
+    if (!texto) throw new Error('Sem resposta');
+    el.innerHTML = `<div style="font-size:12px;line-height:1.7;white-space:pre-wrap;color:var(--texto)">${texto}</div>`;
+  } catch(e) {
+    el.innerHTML = `<div style="font-size:12px;color:var(--vermelho)">⚠️ IA indisponível no momento (créditos Anthropic esgotados ou servidor offline).<br><br>
+      Use manualmente:<br>
+      → <a href="https://www.drugs.com/interactions-check.php" target="_blank" style="color:var(--azul)">Drugs.com Interaction Checker</a><br>
+      → <a href="https://reference.medscape.com/drug-interactionchecker" target="_blank" style="color:var(--azul)">Medscape Drug Interaction Checker</a>
+    </div>`;
+  }
 }
 
 function renderMedsList(meds) {
