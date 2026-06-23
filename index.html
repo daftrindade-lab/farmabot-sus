@@ -647,36 +647,119 @@ function renderMedsList(meds) {
   if (!meds.length) return '<div class="vazia" style="padding:16px"><em>💊</em>Nenhum medicamento</div>';
   return meds.map((m,i)=>`
     <div style="border:1px solid var(--borda);border-radius:8px;padding:10px;margin-bottom:8px;${m.beers_alerta?'border-color:var(--vermelho-borda);background:var(--vermelho-bg)':''}">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start">
-        <div>
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
+        <div style="flex:1">
           <strong>${m.nome}</strong> ${m.beers_alerta?'<span class="badge br">⚠ Beers</span>':''}
           <div style="font-size:12px;color:var(--texto-sec)">${m.dose||'—'} · ${(m.horarios||[]).join(', ')||'—'}</div>
           ${m.beers_alerta?`<div style="font-size:11px;color:var(--vermelho);margin-top:4px">${m.beers_motivo||''}</div>`:''}
         </div>
+        <button onclick="confirmarRemoverMed(${i})" title="Remover medicamento"
+          style="background:var(--vermelho-bg);color:var(--vermelho);border:none;border-radius:6px;padding:4px 8px;font-size:12px;cursor:pointer;flex-shrink:0">🗑</button>
       </div>
     </div>`).join('');
 }
 
+async function confirmarRemoverMed(idx) {
+  const p = _pacAtual;
+  if (!p) return;
+  const med = p.medicamentos[idx];
+  if (!confirm(`Remover "${med.nome}" da lista de medicamentos de ${p.nome}?`)) return;
+  const meds = p.medicamentos.filter((_,i)=>i!==idx);
+  try {
+    await sb(`farmabot_pacientes?id=eq.${p.id}`,{method:'PATCH',body:JSON.stringify({medicamentos:meds})});
+    toast('✅ Medicamento removido!');
+    _pacAtual = {...p, medicamentos: meds};
+    verPaciente(_pacAtual);
+    renderPacientes();
+  } catch { toast('Erro ao remover','err'); }
+}
+
+// Lista de medicamentos comuns SUS para autocomplete
+const MEDS_SUS = [
+  'Metformina','Glibenclamida','Glicazida','Insulina NPH','Insulina Regular',
+  'Captopril','Enalapril','Losartana','Valsartana','Hidroclorotiazida',
+  'Anlodipino','Nifedipino','Atenolol','Carvedilol','Propranolol','Metoprolol',
+  'Sinvastatina','Rosuvastatina','Atorvastatina',
+  'Amiodarona','Digoxina','Furosemida','Espironolactona',
+  'Omeprazol','Ranitidina','Domperidona','Metoclopramida',
+  'Dipirona','Paracetamol','Ibuprofeno','Naproxeno',
+  'Amoxicilina','Azitromicina','Ciprofloxacino','Claritromicina',
+  'Levotiroxina','Prednisona','Dexametasona','Betametasona',
+  'Clonazepam','Diazepam','Alprazolam','Zolpidem','Fenobarbital',
+  'Carbamazepina','Fenitoína','Ácido Valpróico',
+  'Haloperidol','Risperidona','Quetiapina','Olanzapina',
+  'Amitriptilina','Nortriptilina','Fluoxetina','Sertralina','Escitalopram',
+  'Clopidogrel','Aspirina','Varfarina',
+  'Clopidogrel','Anlodipino','Amlodipino',
+  'Alendronato','Carbonato de Cálcio','Vitamina D',
+  'Sulfato Ferroso','Ácido Fólico','Cianocobalamina',
+  'Salbutamol','Ipratrópio','Budesonida','Beclometasona',
+  'Ceftriaxona','Benzilpenicilina','Doxiciclina',
+  'Prometazina','Loratadina','Cetirizina','Hidroxizina',
+  'Tramadol','Codeína','Morfina',
+  'Trayenta','Januvia','Jardiance','Victoza',
+  'Somalgin','Aceclofenaco','Meloxicam','Piroxicam',
+  'Ranitidina','Sucralfato','Misoprostol',
+  'Linagliptina','Sitagliptina','Empagliflozina','Liraglutida',
+];
+
+let _pacAtual = null; // paciente sendo editado
+
 async function abrirAddMed(p) {
+  _pacAtual = p;
+  window._beersAlerta = null;
   abrirModal(`💊 Adicionar medicamento — ${p.nome}`,`
-    <div class="fg"><label class="lbl">Nome do medicamento</label>
-      <input class="inp" id="am-nome" placeholder="Ex: Metformina" oninput="debounceBeers(this.value,'${p.id}')">
+    <div class="fg" style="position:relative">
+      <label class="lbl">Nome do medicamento</label>
+      <input class="inp" id="am-nome" placeholder="Digite para buscar..." autocomplete="off"
+        oninput="filtrarMeds(this.value)" onkeydown="navMeds(event)">
+      <div id="meds-sugestoes" style="position:absolute;top:100%;left:0;right:0;background:white;border:1.5px solid var(--verde-m);border-top:none;border-radius:0 0 8px 8px;max-height:180px;overflow-y:auto;z-index:100;display:none"></div>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-      <div class="fg"><label class="lbl">Dose</label><input class="inp" id="am-dose" placeholder="Ex: 500mg"></div>
+      <div class="fg"><label class="lbl">Dose</label><input class="inp" id="am-dose" placeholder="Ex: 500mg 1cp"></div>
       <div class="fg"><label class="lbl">Frequência</label>
         <select class="inp" id="am-freq">
           <option>1x ao dia</option><option>2x ao dia</option><option>3x ao dia</option>
           <option>De 8 em 8h</option><option>De 12 em 12h</option><option>Em jejum</option>
-          <option>Antes do almoço</option><option>Após o jantar</option>
+          <option>Antes do almoço</option><option>Após o jantar</option><option>Uso contínuo</option>
         </select>
       </div>
     </div>
     <div id="beers-resultado"></div>
     <div class="modal-acoes">
-      <button class="btn btn-c" onclick="verPaciente(${JSON.stringify(p).replace(/'/g,"&#39;")})">Voltar</button>
-      <button class="btn btn-v" id="btn-salvar-med" onclick='salvarMed(${JSON.stringify(p).replace(/'/g,"&#39;")})'>Salvar medicamento</button>
+      <button class="btn btn-c" onclick="voltarParaPaciente()">Voltar</button>
+      <button class="btn btn-v" id="btn-salvar-med" onclick="salvarMed()">Salvar medicamento</button>
     </div>`);
+}
+
+function voltarParaPaciente() {
+  if (_pacAtual) verPaciente(_pacAtual);
+  else fecharModal();
+}
+
+function filtrarMeds(val) {
+  const sug = document.getElementById('meds-sugestoes');
+  if (!val || val.length < 2) { sug.style.display='none'; debounceBeers('',''); return; }
+  const matches = MEDS_SUS.filter(m=>m.toLowerCase().includes(val.toLowerCase())).slice(0,8);
+  if (!matches.length) { sug.style.display='none'; }
+  else {
+    sug.innerHTML = matches.map((m,i)=>
+      `<div onclick="selecionarMed('${m}')" style="padding:9px 12px;cursor:pointer;font-size:13px;border-bottom:1px solid var(--borda)" 
+       onmouseover="this.style.background='var(--verde-bg)'" onmouseout="this.style.background=''">${m}</div>`
+    ).join('');
+    sug.style.display='block';
+  }
+  debounceBeers(val, _pacAtual?.id);
+}
+
+function selecionarMed(nome) {
+  document.getElementById('am-nome').value = nome;
+  document.getElementById('meds-sugestoes').style.display = 'none';
+  debounceBeers(nome, _pacAtual?.id);
+}
+
+function navMeds(e) {
+  if (e.key==='Escape') document.getElementById('meds-sugestoes').style.display='none';
 }
 
 let beersTimer = null;
@@ -784,7 +867,9 @@ function checarInteracoes(novo, existentes) {
   return alertas;
 }
 
-async function salvarMed(p) {
+async function salvarMed() {
+  const p = _pacAtual;
+  if (!p) { toast('Erro: paciente não identificado','err'); return; }
   const nome=document.getElementById('am-nome').value.trim();
   const dose=document.getElementById('am-dose').value.trim();
   const freq=document.getElementById('am-freq').value;
@@ -795,28 +880,72 @@ async function salvarMed(p) {
     await sb(`farmabot_pacientes?id=eq.${p.id}`,{method:'PATCH',body:JSON.stringify({medicamentos:meds})});
     toast('✅ Medicamento salvo!');
     window._beersAlerta = null;
-    fecharModal();
+    // Atualiza _pacAtual com novo medicamento
+    _pacAtual = {...p, medicamentos: meds};
+    verPaciente(_pacAtual);
     renderPacientes();
   } catch{toast('Erro ao salvar','err');}
 }
 
 function editarPaciente(p) {
+  const condsAtuais = p.condicoes || [];
+  window._editCondsTemp = [...condsAtuais];
   abrirModal(`Editar: ${p.nome}`,`
-    <div class="fg"><label class="lbl">Nome</label><input class="inp" id="ep-nome" value="${p.nome}"></div>
-    <div class="fg"><label class="lbl">Telefone</label><input class="inp" id="ep-tel" value="${p.telefone||''}"></div>
-    <div class="fg"><label class="lbl">Idade</label><input class="inp" type="number" id="ep-idade" value="${p.idade||''}"></div>
+    <div class="fg"><label class="lbl">Nome completo</label><input class="inp" id="ep-nome" value="${p.nome||''}"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div class="fg"><label class="lbl">CPF</label><input class="inp" id="ep-cpf" value="${p.cpf||''}" maxlength="11" oninput="this.value=this.value.replace(/\D/g,'')"></div>
+      <div class="fg"><label class="lbl">Data de nascimento</label><input class="inp" type="date" id="ep-nasc" value="${p.data_nascimento||''}"></div>
+    </div>
+    <div class="fg"><label class="lbl">Telefone WhatsApp</label><input class="inp" id="ep-tel" value="${p.telefone||''}" oninput="this.value=this.value.replace(/\D/g,'')"></div>
+    <div class="fg"><label class="lbl">Condições</label>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px" id="edit-cond-chips">
+        ${condsAtuais.map((c,i)=>`<span class="med-chip">${c} <span onclick="removerCondEdit(${i})" style="cursor:pointer;margin-left:2px">×</span></span>`).join('')}
+      </div>
+      <div style="display:flex;gap:6px">
+        <input class="inp" id="ep-cond" placeholder="Adicionar condição (HAS, DM...)" style="flex:1" onkeydown="if(event.key==='Enter'){addCondEdit();event.preventDefault()}">
+        <button class="btn btn-c btn-sm" onclick="addCondEdit()">+</button>
+      </div>
+    </div>
     <div class="modal-acoes">
       <button class="btn btn-c" onclick="fecharModal()">Cancelar</button>
       <button class="btn btn-v" onclick="salvarEditPac('${p.id}')">Salvar</button>
     </div>`);
 }
 
+function addCondEdit() {
+  const inp = document.getElementById('ep-cond');
+  const v = inp.value.trim().toUpperCase();
+  if (!v) return;
+  window._editCondsTemp.push(v);
+  inp.value = '';
+  renderEditCondsChips();
+}
+
+function removerCondEdit(i) {
+  window._editCondsTemp.splice(i, 1);
+  renderEditCondsChips();
+}
+
+function renderEditCondsChips() {
+  document.getElementById('edit-cond-chips').innerHTML = window._editCondsTemp.map((c,i)=>
+    `<span class="med-chip">${c} <span onclick="removerCondEdit(${i})" style="cursor:pointer;margin-left:2px">×</span></span>`
+  ).join('');
+}
+
 async function salvarEditPac(id) {
   const nome=document.getElementById('ep-nome').value.trim();
   const tel=document.getElementById('ep-tel').value.trim();
-  const idade=parseInt(document.getElementById('ep-idade').value)||null;
-  await sb(`farmabot_pacientes?id=eq.${id}`,{method:'PATCH',body:JSON.stringify({nome,telefone:tel,idade})});
-  toast('✅ Paciente atualizado!');fecharModal();renderPacientes();
+  const cpf=document.getElementById('ep-cpf').value.trim();
+  const nasc=document.getElementById('ep-nasc').value;
+  const idade = nasc ? Math.floor((Date.now()-new Date(nasc))/(365.25*24*3600*1000)) : null;
+  const condicoes = window._editCondsTemp || [];
+  if (!nome) { toast('Nome é obrigatório','err'); return; }
+  await sb(`farmabot_pacientes?id=eq.${id}`,{method:'PATCH',body:JSON.stringify({
+    nome, telefone:tel, cpf:cpf||null, data_nascimento:nasc||null, idade, condicoes
+  })});
+  toast('✅ Paciente atualizado!');
+  fecharModal();
+  renderPacientes();
 }
 
 // ── CONVERSAS ──
