@@ -645,18 +645,28 @@ function verPaciente(p) {
 
 function renderMedsList(meds) {
   if (!meds.length) return '<div class="vazia" style="padding:16px"><em>💊</em>Nenhum medicamento</div>';
-  return meds.map((m,i)=>`
-    <div style="border:1px solid var(--borda);border-radius:8px;padding:10px;margin-bottom:8px;${m.beers_alerta?'border-color:var(--vermelho-borda);background:var(--vermelho-bg)':''}">
+  return meds.map((m,i)=>{
+    const temBeers = m.beers_alerta && m.beers_risco;
+    const corBeers = m.beers_risco==='ALTO' ? 'vermelho' : 'ambar';
+    return `
+    <div style="border:1px solid ${temBeers?'var(--'+corBeers+'-borda)':'var(--borda)'};border-radius:8px;padding:11px;margin-bottom:8px;background:${temBeers?'var(--'+corBeers+'-bg)':'white'}">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
         <div style="flex:1">
-          <strong>${m.nome}</strong> ${m.beers_alerta?'<span class="badge br">⚠ Beers</span>':''}
-          <div style="font-size:12px;color:var(--texto-sec)">${m.dose||'—'} · ${(m.horarios||[]).join(', ')||'—'}</div>
-          ${m.beers_alerta?`<div style="font-size:11px;color:var(--vermelho);margin-top:4px">${m.beers_motivo||''}</div>`:''}
+          <div style="font-weight:700;font-size:13px;margin-bottom:3px">
+            ${m.nome}
+            ${temBeers?`<span class="badge ${corBeers==='vermelho'?'br':'ba'}" style="margin-left:6px">⚠ ${m.beers_risco}</span>`:''}
+          </div>
+          <div style="font-size:12px;color:var(--texto-sec);margin-bottom:5px">${m.dose||'—'}</div>
+          <div style="display:flex;flex-wrap:wrap;gap:4px">
+            ${(m.horarios||[]).map(h=>`<span style="background:var(--verde);color:white;padding:3px 8px;border-radius:20px;font-size:11px">⏰ ${h}</span>`).join('')}
+          </div>
+          ${temBeers?`<div style="font-size:11px;color:var(--${corBeers});margin-top:6px">⚠ ${m.beers_motivo||''}</div>`:''}
         </div>
-        <button onclick="confirmarRemoverMed(${i})" title="Remover medicamento"
+        <button onclick="confirmarRemoverMed(${i})" title="Remover"
           style="background:var(--vermelho-bg);color:var(--vermelho);border:none;border-radius:6px;padding:4px 8px;font-size:12px;cursor:pointer;flex-shrink:0">🗑</button>
       </div>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 }
 
 async function confirmarRemoverMed(idx) {
@@ -674,62 +684,231 @@ async function confirmarRemoverMed(idx) {
   } catch { toast('Erro ao remover','err'); }
 }
 
-// Lista de medicamentos comuns SUS para autocomplete
+// Lista completa de medicamentos SUS com alertas Beers 2023
 const MEDS_SUS = [
-  'Metformina','Glibenclamida','Glicazida','Insulina NPH','Insulina Regular',
-  'Captopril','Enalapril','Losartana','Valsartana','Hidroclorotiazida',
-  'Anlodipino','Nifedipino','Atenolol','Carvedilol','Propranolol','Metoprolol',
-  'Sinvastatina','Rosuvastatina','Atorvastatina',
-  'Amiodarona','Digoxina','Furosemida','Espironolactona',
-  'Omeprazol','Ranitidina','Domperidona','Metoclopramida',
-  'Dipirona','Paracetamol','Ibuprofeno','Naproxeno',
-  'Amoxicilina','Azitromicina','Ciprofloxacino','Claritromicina',
-  'Levotiroxina','Prednisona','Dexametasona','Betametasona',
-  'Clonazepam','Diazepam','Alprazolam','Zolpidem','Fenobarbital',
-  'Carbamazepina','Fenitoína','Ácido Valpróico',
-  'Haloperidol','Risperidona','Quetiapina','Olanzapina',
-  'Amitriptilina','Nortriptilina','Fluoxetina','Sertralina','Escitalopram',
-  'Clopidogrel','Aspirina','Varfarina',
-  'Clopidogrel','Anlodipino','Amlodipino',
-  'Alendronato','Carbonato de Cálcio','Vitamina D',
-  'Sulfato Ferroso','Ácido Fólico','Cianocobalamina',
-  'Salbutamol','Ipratrópio','Budesonida','Beclometasona',
-  'Ceftriaxona','Benzilpenicilina','Doxiciclina',
-  'Prometazina','Loratadina','Cetirizina','Hidroxizina',
-  'Tramadol','Codeína','Morfina',
-  'Trayenta','Januvia','Jardiance','Victoza',
-  'Somalgin','Aceclofenaco','Meloxicam','Piroxicam',
-  'Ranitidina','Sucralfato','Misoprostol',
-  'Linagliptina','Sitagliptina','Empagliflozina','Liraglutida',
+  {nome:"ACICLOVIR 200 MG COMPRIMIDO",beers:null},
+  {nome:"ÁCIDO ACETILSALICÍLICO 100 MG COMPRIMIDO",beers:null},
+  {nome:"ÁCIDO FÓLICO 5 MG COMPRIMIDO",beers:null},
+  {nome:"ÁCIDO VALPRÓICO 250 MG COMPRIMIDO",beers:null},
+  {nome:"ALBENDAZOL 400 MG COMPRIMIDO MASTIGÁVEL",beers:null},
+  {nome:"ALOPURINOL 100 MG COMPRIMIDO",beers:null},
+  {nome:"AMBROXOL 3 MG/ML XAROPE 100 ML",beers:null},
+  {nome:"AMIODARONA 200 MG COMPRIMIDO",beers:{risco:"ALTO",motivo:"Risco de toxicidade pulmonar, tireoidiana e hepática — monitorar rigorosamente em idosos",alternativa:"Avaliar com cardiologista"}},
+  {nome:"AMITRIPTILINA 25 MG COMPRIMIDO",beers:{risco:"ALTO",motivo:"Anticolinérgico forte — confusão, quedas, retenção urinária",alternativa:"ISRS se necessário antidepressivo"}},
+  {nome:"AMOXICILINA + CLAVULANATO 500 MG + 125 MG COMPRIMIDO",beers:null},
+  {nome:"AMOXICILINA 500 MG CÁPSULA",beers:null},
+  {nome:"ANLODIPINO 10 MG COMPRIMIDO",beers:null},
+  {nome:"ANLODIPINO 5 MG COMPRIMIDO",beers:null},
+  {nome:"APIXABANA 5 MG COMPRIMIDO",beers:null},
+  {nome:"ATENOLOL 25 MG COMPRIMIDO",beers:null},
+  {nome:"ATENOLOL 50 MG COMPRIMIDO",beers:null},
+  {nome:"AZATIOPRINA 50 MG COMPRIMIDO",beers:null},
+  {nome:"AZITROMICINA 500 MG COMPRIMIDO",beers:null},
+  {nome:"BENZILPENICILINA BENZATINA 1.200.000 UI",beers:null},
+  {nome:"BENZILPENICILINA BENZATINA 600.000 UI",beers:null},
+  {nome:"BIPERIDENO 2 MG COMPRIMIDO",beers:null},
+  {nome:"BISOPROLOL 10 MG COMPRIMIDO",beers:null},
+  {nome:"BISOPROLOL 5 MG COMPRIMIDO",beers:null},
+  {nome:"BROMOPRIDA 10 MG COMPRIMIDO",beers:null},
+  {nome:"CAPTOPRIL 25 MG COMPRIMIDO",beers:null},
+  {nome:"CARBAMAZEPINA 200 MG COMPRIMIDO",beers:null},
+  {nome:"CARBONATO DE CÁLCIO 500 MG COMPRIMIDO",beers:null},
+  {nome:"CARVEDILOL 25 MG COMPRIMIDO",beers:null},
+  {nome:"CARVEDILOL 6,25 MG COMPRIMIDO",beers:null},
+  {nome:"CEFALEXINA 500 MG CÁPSULA",beers:null},
+  {nome:"CEFTRIAXONA 1G PÓ PARA SOLUÇÃO INJETÁVEL",beers:null},
+  {nome:"CICLOSPORINA 100 MG CÁPSULA",beers:null},
+  {nome:"CICLOSPORINA 25 MG CÁPSULA",beers:null},
+  {nome:"CICLOSPORINA 50 MG CÁPSULA",beers:null},
+  {nome:"CILOSTAZOL 100 MG COMPRIMIDO",beers:{risco:"MODERADO",motivo:"Efeito inotrópico positivo — evitar em insuficiência cardíaca",alternativa:"Avaliar com cardiologista"}},
+  {nome:"CILOSTAZOL 50 MG COMPRIMIDO",beers:{risco:"MODERADO",motivo:"Efeito inotrópico positivo — evitar em insuficiência cardíaca",alternativa:"Avaliar com cardiologista"}},
+  {nome:"CINARIZINA 25 MG COMPRIMIDO",beers:{risco:"MODERADO",motivo:"Anti-histamínico — sedação, extrapiramidal em idosos",alternativa:"Evitar uso prolongado"}},
+  {nome:"CIPROFLOXACINO 500 MG COMPRIMIDO",beers:null},
+  {nome:"CLARITROMICINA 500 MG COMPRIMIDO",beers:null},
+  {nome:"CLOMIPRAMINA 25 MG COMPRIMIDO",beers:{risco:"ALTO",motivo:"Antidepressivo tricíclico — anticolinérgico forte",alternativa:"ISRS se necessário"}},
+  {nome:"CLONAZEPAM 2,5 MG/ML SOLUÇÃO ORAL 20 ML",beers:{risco:"ALTO",motivo:"Benzodiazepínico — risco de queda e declínio cognitivo",alternativa:"Reavaliação médica necessária"}},
+  {nome:"CLONIDINA 0,100 MG COMPRIMIDO",beers:{risco:"MODERADO",motivo:"Anti-hipertensivo de ação central — hipotensão ortostática, sedação e bradicardia em idosos",alternativa:"Preferir IECA ou BCC em idosos"}},
+  {nome:"CLOPIDOGREL 75 MG COMPRIMIDO",beers:null},
+  {nome:"CLORPROMAZINA 100 MG COMPRIMIDO",beers:{risco:"MODERADO",motivo:"Antipsicótico — sedação, hipotensão, quedas",alternativa:"Revisar com psiquiatra"}},
+  {nome:"CLORPROMAZINA 25 MG COMPRIMIDO",beers:{risco:"MODERADO",motivo:"Antipsicótico — sedação, hipotensão, quedas",alternativa:"Revisar com psiquiatra"}},
+  {nome:"CLORTALIODONA 25 MG COMPRIMIDO",beers:{risco:"MODERADO",motivo:"Hiponatremia, hipocalemia em idosos",alternativa:"Monitorar eletrólitos"}},
+  {nome:"DABIGATRANA 110 MG CÁPSULA",beers:null},
+  {nome:"DABIGATRANA 150 MG CÁPSULA",beers:null},
+  {nome:"DAPAGLIFOZINA 10 MG COMPRIMIDO",beers:null},
+  {nome:"DAPAGLIFOZINA 5 MG COMPRIMIDO",beers:null},
+  {nome:"DEXAMETASONA 4 MG COMPRIMIDO",beers:null},
+  {nome:"DEXCLORFENIRAMINA 2 MG COMPRIMIDO",beers:{risco:"MODERADO",motivo:"Anti-H1 1ª geração — sedação, confusão em idosos",alternativa:"Loratadina se necessário"}},
+  {nome:"DIAZEPAM 10 MG COMPRIMIDO",beers:{risco:"ALTO",motivo:"Benzodiazepínico — sedação, quedas, dependência",alternativa:"Retirada gradual obrigatória"}},
+  {nome:"DIAZEPAM 5 MG COMPRIMIDO",beers:{risco:"ALTO",motivo:"Benzodiazepínico — sedação, quedas, dependência",alternativa:"Retirada gradual obrigatória"}},
+  {nome:"DICLOFENACO SÓDICO 50 MG COMPRIMIDO",beers:{risco:"ALTO",motivo:"AINE — sangramento GI, insuficiência renal, elevação de PA",alternativa:"Paracetamol para analgesia"}},
+  {nome:"DIGOXINA 0,25 MG COMPRIMIDO",beers:{risco:"MODERADO",motivo:"Janela terapêutica estreita — toxicidade aumentada em idosos",alternativa:"Dose máx 0,125mg/dia. Monitorar nível sérico"}},
+  {nome:"DIPIRONA SÓDICA 500 MG COMPRIMIDO",beers:null},
+  {nome:"DIPIRONA SÓDICA 500 MG/ML SOLUÇÃO ORAL 20 ML",beers:null},
+  {nome:"DOMPERIDONA 10 MG COMPRIMIDO",beers:{risco:"MODERADO",motivo:"Risco de prolongamento QT e arritmia — evitar em idosos com problemas cardíacos",alternativa:"Avaliar necessidade com médico"}},
+  {nome:"DOMPERIDONA 1 MG/ML SUSPENSÃO ORAL 100 ML",beers:null},
+  {nome:"DOXAZOSINA 2 MG COMPRIMIDO",beers:null},
+  {nome:"EMPAGLIFOZINA 10 MG COMPRIMIDO",beers:null},
+  {nome:"EMPAGLIFOZINA 25 MG COMPRIMIDO",beers:null},
+  {nome:"ENALAPRIL 10 MG COMPRIMIDO",beers:null},
+  {nome:"ENALAPRIL 20 MG COMPRIMIDO",beers:null},
+  {nome:"ESCOPOLAMINA + DIPIRONA COMPRIMIDO",beers:null},
+  {nome:"ESPIRONOLACTONA 25 MG COMPRIMIDO",beers:null},
+  {nome:"ESPIRONOLACTONA 50 MG COMPRIMIDO",beers:null},
+  {nome:"FENITOÍNA SÓDICA 100 MG COMPRIMIDO",beers:null},
+  {nome:"FENOBARBITAL 100 MG COMPRIMIDO",beers:null},
+  {nome:"FENOBARBITAL 40 MG/ML SOLUÇÃO ORAL 20 ML",beers:null},
+  {nome:"FINASTERIDA 5 MG COMPRIMIDO",beers:null},
+  {nome:"FLUCONAZOL 150 MG CÁPSULA",beers:null},
+  {nome:"FLUOXETINA 20 MG CÁPSULA",beers:null},
+  {nome:"FUROSEMIDA 40 MG COMPRIMIDO",beers:{risco:"MODERADO",motivo:"Hipovolemia, quedas, distúrbios eletrolíticos em idosos",alternativa:"Menor dose efetiva. Monitorar hidratação"}},
+  {nome:"GLIBENCLAMIDA 5 MG COMPRIMIDO",beers:{risco:"ALTO",motivo:"Hipoglicemia prolongada — meia-vida longa em idosos",alternativa:"Gliclazida ou Metformina (se TFG adequada)"}},
+  {nome:"GLICLAZIDA 30 MG COMPRIMIDO DE LIBERAÇÃO PROLONGADA",beers:null},
+  {nome:"GLICLAZIDA 60 MG COMPRIMIDO DE LIBERAÇÃO PROLONGADA",beers:null},
+  {nome:"HALOPERIDOL 1 MG COMPRIMIDO",beers:{risco:"MODERADO",motivo:"Antipsicótico — risco de AVC e mortalidade em idosos",alternativa:"Usar apenas se estritamente necessário"}},
+  {nome:"HALOPERIDOL 5 MG COMPRIMIDO",beers:{risco:"MODERADO",motivo:"Antipsicótico — risco de AVC e mortalidade em idosos",alternativa:"Usar apenas se estritamente necessário"}},
+  {nome:"HIDROCLOROTIAZIDA 25 MG COMPRIMIDO",beers:{risco:"MODERADO",motivo:"Hiponatremia, hipocalemia e hipovolemia em idosos",alternativa:"Monitorar eletrólitos regularmente"}},
+  {nome:"IBUPROFENO 300 MG COMPRIMIDO",beers:{risco:"ALTO",motivo:"AINE — sangramento GI, insuficiência renal, elevação de PA",alternativa:"Paracetamol para analgesia"}},
+  {nome:"IBUPROFENO 600 MG COMPRIMIDO",beers:{risco:"ALTO",motivo:"AINE — sangramento GI, insuficiência renal, elevação de PA",alternativa:"Paracetamol para analgesia"}},
+  {nome:"INDAPAMIDA 1,5 MG COMPRIMIDO LIBERAÇÃO PROLONGADA",beers:null},
+  {nome:"INSULINA HUMANA NPH 100 UI/ML 10 ML",beers:null},
+  {nome:"INSULINA HUMANA NPH 100 UI/ML 3 ML",beers:null},
+  {nome:"INSULINA HUMANA REGULAR 100 UI/ML 10 ML",beers:null},
+  {nome:"INSULINA HUMANA REGULAR 100 UI/ML 3 ML",beers:null},
+  {nome:"IPRATRÓPIO 0,25 MG/ML SOLUÇÃO PARA INALAÇÃO",beers:null},
+  {nome:"ISOSSORBIDA DINITRATO 5 MG COMPRIMIDO SUBLINGUAL",beers:null},
+  {nome:"ISOSSORBIDA MONONITRATO 20 MG COMPRIMIDO",beers:null},
+  {nome:"IVERMECTINA 6 MG COMPRIMIDO",beers:null},
+  {nome:"LEVODOPA + BENSERAZIDA 200 + 50 MG COMPRIMIDO",beers:null},
+  {nome:"LEVOTIROXINA SÓDICA 100 MCG COMPRIMIDO",beers:null},
+  {nome:"LEVOTIROXINA SÓDICA 25 MCG COMPRIMIDO",beers:null},
+  {nome:"LEVOTIROXINA SÓDICA 50 MCG COMPRIMIDO",beers:null},
+  {nome:"LORATADINA 10 MG COMPRIMIDO",beers:null},
+  {nome:"LOSARTANA POTÁSSICA 50 MG COMPRIMIDO",beers:null},
+  {nome:"METFORMINA 500 MG COMPRIMIDO",beers:null},
+  {nome:"METFORMINA 500 MG LIBERAÇÃO CONTROLADA",beers:null},
+  {nome:"METFORMINA 850 MG COMPRIMIDO",beers:null},
+  {nome:"METILDOPA 250 MG COMPRIMIDO",beers:null},
+  {nome:"METOCLOPRAMIDA 10 MG COMPRIMIDO",beers:{risco:"ALTO",motivo:"Risco de sintomas extrapiramidais e discinesia tardia",alternativa:"Evitar uso prolongado"}},
+  {nome:"METOPROLOL SUCCINATO 50 MG COMPRIMIDO",beers:null},
+  {nome:"METRONIDAZOL 400 MG COMPRIMIDO",beers:null},
+  {nome:"MICOFENOLATO DE MOFETILA 500 MG COMPRIMIDO",beers:null},
+  {nome:"MICOFENOLATO DE SÓDIO 360 MG COMPRIMIDO",beers:null},
+  {nome:"NIFEDIPINO 10 MG COMPRIMIDO",beers:{risco:"ALTO",motivo:"BCC de ação curta — hipotensão, quedas em idosos",alternativa:"Anlodipino (ação longa) preferível"}},
+  {nome:"NIMESULIDA 100 MG COMPRIMIDO",beers:{risco:"ALTO",motivo:"Hepatotoxicidade e nefrotoxicidade aumentadas em idosos",alternativa:"Contraindicado em idosos"}},
+  {nome:"NISTATINA 100.000 UI/ML SUSPENSÃO ORAL 30 ML",beers:null},
+  {nome:"NORTRIPTILINA 25 MG CÁPSULA",beers:{risco:"ALTO",motivo:"Antidepressivo tricíclico — anticolinérgico, quedas",alternativa:"ISRS se necessário"}},
+  {nome:"NORTRIPTILINA 50 MG CÁPSULA",beers:{risco:"ALTO",motivo:"Antidepressivo tricíclico — anticolinérgico, quedas",alternativa:"ISRS se necessário"}},
+  {nome:"OMEPRAZOL 20 MG CÁPSULA",beers:null},
+  {nome:"PARACETAMOL 200 MG/ML SOLUÇÃO ORAL 15 ML",beers:null},
+  {nome:"PARACETAMOL 500 MG COMPRIMIDO",beers:null},
+  {nome:"PREDNISOLONA 1 MG/ML SOLUÇÃO ORAL 100 ML",beers:null},
+  {nome:"PREDNISONA 20 MG COMPRIMIDO",beers:null},
+  {nome:"PREDNISONA 5 MG COMPRIMIDO",beers:null},
+  {nome:"PROMETAZINA 25 MG COMPRIMIDO",beers:{risco:"ALTO",motivo:"Anti-H1 1ª geração — sedação, confusão, retenção urinária",alternativa:"Loratadina se antialérgico necessário"}},
+  {nome:"PROPRANOLOL 40 MG COMPRIMIDO",beers:null},
+  {nome:"RIVAROXABANA 15 MG COMPRIMIDO",beers:null},
+  {nome:"RIVAROXABANA 20 MG COMPRIMIDO",beers:null},
+  {nome:"ROSUVASTATINA 10 MG COMPRIMIDO",beers:null},
+  {nome:"ROSUVASTATINA 20 MG COMPRIMIDO",beers:null},
+  {nome:"ROSUVASTATINA 40 MG COMPRIMIDO",beers:null},
+  {nome:"SALBUTAMOL 100 MCG/DOSE AEROSSOL 200 DOSES",beers:null},
+  {nome:"SAXAGLIPTINA 5 MG COMPRIMIDO",beers:null},
+  {nome:"SINVASTATINA 20 MG COMPRIMIDO",beers:null},
+  {nome:"SITAGLIPTINA 100 MG COMPRIMIDO",beers:null},
+  {nome:"SOMALGIN 100 MG COMPRIMIDO",beers:null},
+  {nome:"SULFAMETOXAZOL + TRIMETOPRIMA 400 + 80 MG COMPRIMIDO",beers:null},
+  {nome:"SULFATO FERROSO 40 MG COMPRIMIDO",beers:null},
+  {nome:"TACROLIMUS 0,5 MG CÁPSULA",beers:null},
+  {nome:"TACROLIMUS 1 MG CÁPSULA",beers:null},
+  {nome:"TACROLIMUS 5 MG CÁPSULA",beers:null},
+  {nome:"TRAYENTA 5 MG COMPRIMIDO (LINAGLIPTINA)",beers:null},
+  {nome:"VARFARINA SÓDICA 5 MG COMPRIMIDO",beers:{risco:"MODERADO",motivo:"Anticoagulante — risco aumentado de sangramento em idosos",alternativa:"Monitorar INR rigorosamente"}},
+  {nome:"VILDAGLIPTINA 50 MG COMPRIMIDO",beers:null},
 ];
 
-let _pacAtual = null; // paciente sendo editado
+const HORARIOS_REFEICAO = [
+  'Em jejum (antes do café)','Café da manhã','Manhã (após café)',
+  'Antes do almoço','Almoço','Após o almoço','Lanche da tarde',
+  'Tarde (14h-16h)','Antes do jantar','Jantar','Após o jantar',
+  'Ao dormir (noite)','A cada 6 horas','A cada 8 horas',
+  'A cada 12 horas','A cada 24 horas','Se necessário','Uso contínuo (1x/dia)'
+];
+const HORARIOS_EXATOS = ['06:00','07:00','08:00','09:00','10:00','11:00','12:00','13:00','14:00','15:00','16:00','17:00','18:00','19:00','20:00','21:00','22:00','23:00','00:00'];
+
+let _horariosTemp = [];
 
 async function abrirAddMed(p) {
   _pacAtual = p;
+  _horariosTemp = [];
   window._beersAlerta = null;
   abrirModal(`💊 Adicionar medicamento — ${p.nome}`,`
     <div class="fg" style="position:relative">
-      <label class="lbl">Nome do medicamento</label>
-      <input class="inp" id="am-nome" placeholder="Digite para buscar..." autocomplete="off"
+      <label class="lbl">Buscar medicamento (Lista da UBS)</label>
+      <input class="inp" id="am-nome" placeholder="Digite o nome para buscar..." autocomplete="off"
         oninput="filtrarMeds(this.value)" onkeydown="navMeds(event)">
-      <div id="meds-sugestoes" style="position:absolute;top:100%;left:0;right:0;background:white;border:1.5px solid var(--verde-m);border-top:none;border-radius:0 0 8px 8px;max-height:180px;overflow-y:auto;z-index:100;display:none"></div>
-    </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-      <div class="fg"><label class="lbl">Dose</label><input class="inp" id="am-dose" placeholder="Ex: 500mg 1cp"></div>
-      <div class="fg"><label class="lbl">Frequência</label>
-        <select class="inp" id="am-freq">
-          <option>1x ao dia</option><option>2x ao dia</option><option>3x ao dia</option>
-          <option>De 8 em 8h</option><option>De 12 em 12h</option><option>Em jejum</option>
-          <option>Antes do almoço</option><option>Após o jantar</option><option>Uso contínuo</option>
-        </select>
-      </div>
+      <div id="meds-sugestoes" style="position:absolute;top:100%;left:0;right:0;background:white;border:1.5px solid var(--verde-m);border-top:none;border-radius:0 0 8px 8px;max-height:200px;overflow-y:auto;z-index:100;display:none;box-shadow:0 4px 12px rgba(0,0,0,.1)"></div>
     </div>
     <div id="beers-resultado"></div>
+    <div class="fg"><label class="lbl">Dose / Quantidade</label>
+      <input class="inp" id="am-dose" placeholder="Ex: 1 comprimido, 6 UI, 2 gotas">
+    </div>
+    <div class="fg">
+      <label class="lbl">⏰ Horários dos lembretes — selecione um ou mais</label>
+      <div style="font-size:11px;color:var(--texto-sec);margin-bottom:8px">Horários por refeição:</div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px">
+        ${HORARIOS_REFEICAO.map(h=>`<button type="button" class="chip-horario" data-h="${h}" onclick="toggleHorario(this,'${h}')"
+          style="padding:5px 10px;border:1.5px solid var(--borda);border-radius:20px;font-size:12px;background:white;cursor:pointer;transition:all .15s">${h}</button>`).join('')}
+      </div>
+      <div style="font-size:11px;color:var(--texto-sec);margin-bottom:8px">Ou selecione horário exato:</div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px">
+        ${HORARIOS_EXATOS.map(h=>`<button type="button" class="chip-horario" data-h="${h}" onclick="toggleHorario(this,'${h}')"
+          style="padding:5px 10px;border:1.5px solid var(--borda);border-radius:20px;font-size:12px;background:white;cursor:pointer;font-family:monospace;transition:all .15s">${h}</button>`).join('')}
+      </div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <input type="time" class="inp" id="am-horario-custom" style="width:130px">
+        <button class="btn btn-c btn-sm" onclick="adicionarHorarioCustom()">+ Adicionar horário</button>
+      </div>
+      <div id="horarios-selecionados" style="margin-top:8px;display:flex;flex-wrap:wrap;gap:5px"></div>
+    </div>
     <div class="modal-acoes">
-      <button class="btn btn-c" onclick="voltarParaPaciente()">Voltar</button>
-      <button class="btn btn-v" id="btn-salvar-med" onclick="salvarMed()">Salvar medicamento</button>
+      <button class="btn btn-c" onclick="voltarParaPaciente()">← Voltar</button>
+      <button class="btn btn-v" id="btn-salvar-med" onclick="salvarMed()">+ Adicionar à prescrição</button>
     </div>`);
+}
+
+function toggleHorario(btn, h) {
+  const idx = _horariosTemp.indexOf(h);
+  if (idx >= 0) {
+    _horariosTemp.splice(idx, 1);
+    btn.style.background = 'white';
+    btn.style.borderColor = 'var(--borda)';
+    btn.style.color = 'var(--texto)';
+  } else {
+    _horariosTemp.push(h);
+    btn.style.background = 'var(--verde)';
+    btn.style.borderColor = 'var(--verde)';
+    btn.style.color = 'white';
+  }
+  renderHorariosSelecionados();
+}
+
+function adicionarHorarioCustom() {
+  const val = document.getElementById('am-horario-custom').value;
+  if (!val) return;
+  if (!_horariosTemp.includes(val)) {
+    _horariosTemp.push(val);
+    renderHorariosSelecionados();
+  }
+  document.getElementById('am-horario-custom').value = '';
+}
+
+function renderHorariosSelecionados() {
+  const el = document.getElementById('horarios-selecionados');
+  if (!el) return;
+  const label = document.querySelector('.lbl + div + div + div .lbl') || null;
+  el.innerHTML = _horariosTemp.length
+    ? _horariosTemp.map((h,i)=>`<span class="med-chip" style="background:var(--verde-bg);color:var(--verde)">${h} <span onclick="_horariosTemp.splice(${i},1);renderHorariosSelecionados()" style="cursor:pointer;margin-left:3px">×</span></span>`).join('')
+    : '';
 }
 
 function voltarParaPaciente() {
@@ -739,23 +918,61 @@ function voltarParaPaciente() {
 
 function filtrarMeds(val) {
   const sug = document.getElementById('meds-sugestoes');
-  if (!val || val.length < 2) { sug.style.display='none'; debounceBeers('',''); return; }
-  const matches = MEDS_SUS.filter(m=>m.toLowerCase().includes(val.toLowerCase())).slice(0,8);
-  if (!matches.length) { sug.style.display='none'; }
-  else {
-    sug.innerHTML = matches.map((m,i)=>
-      `<div onclick="selecionarMed('${m}')" style="padding:9px 12px;cursor:pointer;font-size:13px;border-bottom:1px solid var(--borda)" 
-       onmouseover="this.style.background='var(--verde-bg)'" onmouseout="this.style.background=''">${m}</div>`
-    ).join('');
-    sug.style.display='block';
-  }
-  debounceBeers(val, _pacAtual?.id);
+  if (!val || val.length < 2) { sug.style.display='none'; return; }
+  const matches = MEDS_SUS.filter(m=>m.nome.toUpperCase().includes(val.toUpperCase())).slice(0,10);
+  if (!matches.length) { sug.style.display='none'; return; }
+  sug.innerHTML = matches.map(m=>`
+    <div onclick="selecionarMed(${JSON.stringify(m).replace(/"/g,'&quot;')})"
+      style="padding:9px 12px;cursor:pointer;font-size:12px;border-bottom:1px solid var(--borda);display:flex;align-items:center;justify-content:space-between"
+      onmouseover="this.style.background='var(--verde-bg)'" onmouseout="this.style.background=''">
+      <span>${m.nome}</span>
+      ${m.beers ? `<span class="badge ${m.beers.risco==='ALTO'?'br':'ba'}" style="font-size:10px;flex-shrink:0;margin-left:8px">⚠ ${m.beers.risco}</span>` : ''}
+    </div>`).join('');
+  sug.style.display='block';
 }
 
-function selecionarMed(nome) {
-  document.getElementById('am-nome').value = nome;
+function selecionarMed(m) {
+  document.getElementById('am-nome').value = m.nome;
   document.getElementById('meds-sugestoes').style.display = 'none';
-  debounceBeers(nome, _pacAtual?.id);
+  // Mostrar alerta Beers imediatamente da lista local
+  const el = document.getElementById('beers-resultado');
+  if (!el) return;
+  if (m.beers) {
+    const cor = m.beers.risco === 'ALTO' ? 'vermelho' : 'ambar';
+    const icon = m.beers.risco === 'ALTO' ? '🚨' : '⚠️';
+    el.innerHTML = `
+      <div style="background:var(--${cor}-bg);border:1.5px solid var(--${cor}-borda);border-radius:var(--r);padding:13px;margin-top:10px">
+        <div style="font-weight:700;color:var(--${cor});font-size:13px;margin-bottom:6px">${icon} Lista Beers 2023 — Risco ${m.beers.risco}</div>
+        <div style="font-size:12px;color:var(--${cor});margin-bottom:4px">⚠ ${m.beers.motivo}</div>
+        <div style="font-size:12px;color:var(--${cor})">💡 Alternativa: ${m.beers.alternativa}</div>
+      </div>`;
+    window._beersAlerta = { alerta: true, motivo: m.beers.motivo, risco: m.beers.risco };
+  } else {
+    el.innerHTML = `<div style="background:var(--verde-bg);border:1px solid var(--verde-borda);border-radius:var(--r);padding:10px;margin-top:10px;font-size:12px;color:var(--verde)">✅ Não consta na Lista Beers 2023</div>`;
+    window._beersAlerta = { alerta: false, motivo: null };
+  }
+  // Checar interações com medicamentos já cadastrados
+  checarInteracoesLocais(m.nome);
+}
+
+function checarInteracoesLocais(novoMed) {
+  if (!_pacAtual) return;
+  const medsExistentes = (_pacAtual.medicamentos||[]).map(m=>m.nome.toUpperCase());
+  const novo = novoMed.toUpperCase();
+  const interacoes = checarInteracoes(novo, medsExistentes);
+  if (interacoes.length) {
+    const el = document.getElementById('beers-resultado');
+    if (el) el.innerHTML += `
+      <div class="interacao-box" style="margin-top:8px">
+        <div class="interacao-tit">⚠️ Interações com medicamentos atuais</div>
+        ${interacoes.map(i=>`<div class="interacao-li">${i}</div>`).join('')}
+        <div style="font-size:11px;color:var(--ambar);margin-top:6px">
+          Verifique em: 
+          <a href="https://www.drugs.com/interactions-check.php" target="_blank" style="color:var(--ambar)">Drugs.com</a> · 
+          <a href="https://reference.medscape.com/drug-interactionchecker" target="_blank" style="color:var(--ambar)">Medscape</a>
+        </div>
+      </div>`;
+  }
 }
 
 function navMeds(e) {
@@ -872,15 +1089,21 @@ async function salvarMed() {
   if (!p) { toast('Erro: paciente não identificado','err'); return; }
   const nome=document.getElementById('am-nome').value.trim();
   const dose=document.getElementById('am-dose').value.trim();
-  const freq=document.getElementById('am-freq').value;
-  if (!nome){toast('Informe o medicamento','err');return;}
-  const novoMed = { nome, dose, horarios:[freq], beers_alerta: window._beersAlerta?.alerta||false, beers_motivo: window._beersAlerta?.motivo||null };
+  if (!nome){toast('Selecione o medicamento','err');return;}
+  if (!_horariosTemp.length){toast('Selecione pelo menos um horário','err');return;}
+  const novoMed = {
+    nome, dose,
+    horarios: [..._horariosTemp],
+    beers_alerta: window._beersAlerta?.alerta||false,
+    beers_motivo: window._beersAlerta?.motivo||null,
+    beers_risco: window._beersAlerta?.risco||null
+  };
   const meds = [...(p.medicamentos||[]), novoMed];
   try {
     await sb(`farmabot_pacientes?id=eq.${p.id}`,{method:'PATCH',body:JSON.stringify({medicamentos:meds})});
-    toast('✅ Medicamento salvo!');
+    toast('✅ Medicamento adicionado à prescrição!');
     window._beersAlerta = null;
-    // Atualiza _pacAtual com novo medicamento
+    _horariosTemp = [];
     _pacAtual = {...p, medicamentos: meds};
     verPaciente(_pacAtual);
     renderPacientes();
