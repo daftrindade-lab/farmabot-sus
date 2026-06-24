@@ -299,6 +299,7 @@ function renderSidebar() {
   ] : [
     {id:'dashboard',icon:'📊',label:'Início'},
     {id:'pacientes',icon:'👥',label:'Meus pacientes'},
+    {id:'renovacoes',icon:'📋',label:'Renovações',badge:'renov'},
     {id:'conversas',icon:'💬',label:'Conversas',badge:'conv'},
   ];
   document.getElementById('sidebar').innerHTML =
@@ -321,6 +322,7 @@ function irSecao(id) {
     ubs: renderUbs,
     farmaceuticos: renderFarmaceuticos,
     pacientes: renderPacientes,
+    renovacoes: renderRenovacoes,
     conversas: ()=>renderConversas(false),
     'conversas-gestor': ()=>renderConversas(true),
   };
@@ -800,9 +802,28 @@ Seja objetivo e prático. Use linguagem que um farmacêutico do SUS entenda. For
 
 function renderMedsList(meds) {
   if (!meds.length) return '<div class="vazia" style="padding:16px"><em>💊</em>Nenhum medicamento</div>';
+  const hoje = new Date();
   return meds.map((m,i)=>{
     const temBeers = m.beers_alerta && m.beers_risco;
     const corBeers = m.beers_risco==='ALTO' ? 'vermelho' : 'ambar';
+
+    // Calcula status da receita
+    let statusReceita = '';
+    if (m.data_prescricao) {
+      const dp = new Date(m.data_prescricao);
+      const dias = Math.floor((hoje - dp) / (1000 * 60 * 60 * 24));
+      const dv = new Date(m.data_prescricao);
+      dv.setMonth(dv.getMonth() + 6);
+      const dvStr = dv.toLocaleDateString('pt-BR');
+      if (dias > 180) {
+        statusReceita = `<span class="badge br" style="margin-left:6px">⚠ Receita vencida</span>`;
+      } else if (dias >= 150) {
+        statusReceita = `<span class="badge ba" style="margin-left:6px">⏰ Renovar até ${dvStr}</span>`;
+      } else if (m.data_vencimento) {
+        statusReceita = `<span style="font-size:11px;color:var(--texto-ter);margin-left:6px">válida até ${dvStr}</span>`;
+      }
+    }
+
     return `
     <div style="border:1px solid ${temBeers?'var(--'+corBeers+'-borda)':'var(--borda)'};border-radius:8px;padding:11px;margin-bottom:8px;background:${temBeers?'var(--'+corBeers+'-bg)':'white'}">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
@@ -810,6 +831,7 @@ function renderMedsList(meds) {
           <div style="font-weight:700;font-size:13px;margin-bottom:3px">
             ${m.nome}
             ${temBeers?`<span class="badge ${corBeers==='vermelho'?'br':'ba'}" style="margin-left:6px">⚠ ${m.beers_risco}</span>`:''}
+            ${statusReceita}
           </div>
           <div style="font-size:12px;color:var(--texto-sec);margin-bottom:5px">${m.dose||'—'}</div>
           <div style="display:flex;flex-wrap:wrap;gap:4px">
@@ -1002,6 +1024,10 @@ async function abrirAddMed(p) {
       <input class="inp" id="am-nome" placeholder="Digite o nome para buscar..." autocomplete="off"
         oninput="filtrarMeds(this.value)" onkeydown="navMeds(event)">
       <div id="meds-sugestoes" style="position:absolute;top:100%;left:0;right:0;background:white;border:1.5px solid var(--verde-m);border-top:none;border-radius:0 0 8px 8px;max-height:200px;overflow-y:auto;z-index:100;display:none;box-shadow:0 4px 12px rgba(0,0,0,.1)"></div>
+    </div>
+    <div class="fg"><label class="lbl">Data da prescrição (assinatura do médico)</label>
+      <input class="inp" type="date" id="am-data-prescricao" max="${new Date().toLocaleDateString('en-CA')}">
+      <div style="font-size:11px;color:var(--texto-ter);margin-top:3px">Validade: 6 meses. Alerta automático no 5º mês.</div>
     </div>
     <div id="beers-resultado"></div>
     <div class="fg"><label class="lbl">Dose / Quantidade</label>
@@ -1273,11 +1299,23 @@ async function salvarMed() {
   if (!p) { toast('Erro: paciente não identificado','err'); return; }
   const nome=document.getElementById('am-nome').value.trim();
   const dose=document.getElementById('am-dose').value.trim();
+  const dataPrescrição=document.getElementById('am-data-prescricao').value;
   if (!nome){toast('Selecione o medicamento','err');return;}
   if (!_horariosTemp.length){toast('Selecione pelo menos um horário','err');return;}
+
+  // Calcula data de vencimento (6 meses)
+  let dataVencimento = null;
+  if (dataPrescrição) {
+    const dv = new Date(dataPrescrição);
+    dv.setMonth(dv.getMonth() + 6);
+    dataVencimento = dv.toLocaleDateString('en-CA');
+  }
+
   const novoMed = {
     nome, dose,
     horarios: [..._horariosTemp],
+    data_prescricao: dataPrescrição || null,
+    data_vencimento: dataVencimento,
     beers_alerta: window._beersAlerta?.alerta||false,
     beers_motivo: window._beersAlerta?.motivo||null,
     beers_risco: window._beersAlerta?.risco||null
@@ -1472,6 +1510,78 @@ function atualizarBadgeConv(n) {
   const nw=document.getElementById('notif-wrap');
   const nn=document.getElementById('notif-num');
   if(nw&&nn){nw.style.display=n>0?'block':'none';nn.textContent=n;}
+}
+
+// ── Renovações ────────────────────────────────────────────────────────────────
+async function renderRenovacoes() {
+  const ubsEnc = enc(U.ubs);
+  const [alertas, pacientes] = await Promise.all([
+    sb(`farmabot_alertas_renovacao?ubs_nome=eq.${ubsEnc}&order=data_alerta.desc&limit=50`),
+    sb(`farmabot_pacientes?ubs_nome=eq.${ubsEnc}&select=id,nome,medicamentos`)
+  ]);
+
+  // Busca também receitas vencendo diretamente dos pacientes (sem esperar o alerta do servidor)
+  const hoje = new Date();
+  const vencendoLocal = [];
+  (Array.isArray(pacientes) ? pacientes : []).forEach(p => {
+    (p.medicamentos||[]).forEach(m => {
+      if (!m.data_prescricao) return;
+      const dp = new Date(m.data_prescricao);
+      const dias = Math.floor((hoje - dp) / (1000 * 60 * 60 * 24));
+      const dv = new Date(m.data_prescricao);
+      dv.setMonth(dv.getMonth() + 6);
+      if (dias >= 150) {
+        vencendoLocal.push({
+          paciente: p.nome,
+          medicamento: m.nome,
+          dias,
+          vencimento: dv.toLocaleDateString('pt-BR'),
+          vencida: dias > 180
+        });
+      }
+    });
+  });
+
+  // Atualiza badge
+  const totalPendente = vencendoLocal.length;
+  const badge = document.getElementById('badge-renov');
+  if (badge) { badge.textContent = totalPendente; badge.style.display = totalPendente > 0 ? '' : 'none'; }
+
+  document.getElementById('main-content').innerHTML = `
+    <div class="sec-titulo">📋 Renovação de receitas</div>
+
+    ${vencendoLocal.length ? `
+    <div class="card">
+      <div class="card-tit">
+        ⚠️ Receitas vencendo ou vencidas
+        <span class="badge ${vencendoLocal.some(v=>v.vencida) ? 'br' : 'ba'}">${vencendoLocal.length} medicamento(s)</span>
+      </div>
+      ${vencendoLocal.map(v=>`
+        <div class="il">
+          <div class="av ${v.vencida ? 'av-r' : 'av-a'}">${v.vencida ? '❌' : '⏰'}</div>
+          <div class="ii">
+            <div class="in">${v.paciente}</div>
+            <div class="is">${v.medicamento} · ${v.vencida ? `<span style="color:var(--vermelho);font-weight:600">Receita vencida há ${v.dias - 180} dia(s)</span>` : `<span style="color:var(--ambar);font-weight:600">Vence em ${v.vencimento} (${180 - v.dias} dia(s))</span>`}</div>
+          </div>
+          <span class="badge ${v.vencida ? 'br' : 'ba'}">${v.vencida ? 'Vencida' : 'Vencendo'}</span>
+        </div>`).join('')}
+    </div>` : `
+    <div class="card">
+      <div class="vazia"><em>✅</em>Nenhuma receita vencendo nos próximos 30 dias</div>
+    </div>`}
+
+    <div class="card">
+      <div class="card-tit">📬 Histórico de alertas enviados</div>
+      ${Array.isArray(alertas) && alertas.length ? alertas.map(a=>`
+        <div class="il">
+          <div class="av av-v">📋</div>
+          <div class="ii">
+            <div class="in">${a.paciente_nome}</div>
+            <div class="is">${(a.medicamentos||[]).join(', ')} · Alerta em ${new Date(a.data_alerta).toLocaleDateString('pt-BR')}</div>
+          </div>
+          <span class="badge ${a.status==='pendente'?'ba':'bv'}">${a.status}</span>
+        </div>`).join('') : '<div class="vazia"><em>📬</em>Nenhum alerta enviado ainda</div>'}
+    </div>`;
 }
 
 async function verificarPendencias() {
