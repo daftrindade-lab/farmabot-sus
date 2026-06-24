@@ -567,6 +567,7 @@ function renderListaPac(lista) {
       <div class="ia">
         <button class="btn btn-az btn-sm" onclick='verPaciente(${JSON.stringify(p).replace(/'/g,"&#39;")})'>Ver</button>
         <button class="btn btn-am btn-sm" onclick='editarPaciente(${JSON.stringify(p).replace(/'/g,"&#39;")})'>✏️</button>
+        <button class="btn btn-ve btn-sm" onclick="confirmarExcluirPaciente('${p.id}','${p.nome.replace(/'/g,"\\'")}')">🗑</button>
       </div>
     </div>`;
   }).join('');
@@ -1332,7 +1333,26 @@ async function salvarMed() {
   } catch{toast('Erro ao salvar','err');}
 }
 
-function editarPaciente(p) {
+function confirmarExcluirPaciente(id, nome) {
+  abrirModal('🗑 Excluir paciente', `
+    <p style="color:var(--texto-sec);font-size:14px;margin-bottom:16px">
+      Tem certeza que deseja excluir <strong>${nome}</strong>?<br>
+      <span style="color:var(--vermelho);font-size:13px">Esta ação não pode ser desfeita. Todos os medicamentos e dados do paciente serão removidos.</span>
+    </p>
+    <div class="modal-acoes">
+      <button class="btn btn-c" onclick="fecharModal()">Cancelar</button>
+      <button class="btn btn-ve" onclick="excluirPaciente('${id}')">Sim, excluir</button>
+    </div>`);
+}
+
+async function excluirPaciente(id) {
+  try {
+    await sb(`farmabot_pacientes?id=eq.${id}`, { method: 'DELETE' });
+    toast('✅ Paciente excluído');
+    fecharModal();
+    renderPacientes();
+  } catch(e) { toast('Erro ao excluir paciente', 'err'); }
+}
   const condsAtuais = p.condicoes || [];
   window._editCondsTemp = [...condsAtuais];
   abrirModal(`Editar: ${p.nome}`,`
