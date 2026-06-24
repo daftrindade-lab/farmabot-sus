@@ -567,7 +567,7 @@ function renderListaPac(lista) {
       <div class="ia">
         <button class="btn btn-az btn-sm" onclick='verPaciente(${JSON.stringify(p).replace(/'/g,"&#39;")})'>Ver</button>
         <button class="btn btn-am btn-sm" onclick='editarPaciente(${JSON.stringify(p).replace(/'/g,"&#39;")})'>✏️</button>
-        <button class="btn btn-ve btn-sm" onclick="confirmarExcluirPaciente('${p.id}','${p.nome.replace(/'/g,"\\'")}')">🗑</button>
+        <button class="btn btn-ve btn-sm" onclick="confirmarExcluirPaciente('${p.id}','${p.nome.replace(/'/g,"&apos;").replace(/"/g,"&quot;")}')">🗑</button>
       </div>
     </div>`;
   }).join('');
