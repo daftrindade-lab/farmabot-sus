@@ -728,7 +728,7 @@ async function analisarPrescricao(p) {
 async function rodarAnaliseIA(p) {
   const el = document.getElementById('ia-resultado');
   if (!el) return;
-  el.innerHTML = '<span class="spin" style="border-color:rgba(79,66,181,.3);border-top-color:var(--roxo)"></span> Analisando prescrição completa...';
+  el.innerHTML = '<span class="spin" style="border-color:rgba(79,66,181,.3);border-top-color:var(--roxo)"></span> Analisando prescrição... <span style="font-size:11px;color:var(--texto-ter)">(pode levar até 1 min na primeira vez)</span>';
 
   const meds = (p.medicamentos||[]).map(m=>`${m.nome} (${m.dose||'dose não informada'}, ${(m.horarios||[]).join('/')})`).join('; ');
   const prompt = `Analise a prescrição completa deste paciente e identifique problemas clínicos relevantes:
@@ -749,11 +749,15 @@ Seja objetivo e prático. Use linguagem que um farmacêutico do SUS entenda. For
   // Tenta Gemini (gratuito) primeiro, depois Claude como fallback
   const GEMINI_KEY = process.env.GEMINI_KEY; // não usado no frontend — chave fica no servidor
   try {
+    const controller = new AbortController();
+    const tid = setTimeout(() => controller.abort(), 90000);
     const res = await fetch(`${BACKEND}/api/gemini`, {
       method: 'POST',
       headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ prompt })
+      body: JSON.stringify({ prompt }),
+      signal: controller.signal
     });
+    clearTimeout(tid);
     const d = await res.json();
     const texto = d.texto;
     if (!texto) throw new Error(d.erro || 'Sem resposta Gemini');
