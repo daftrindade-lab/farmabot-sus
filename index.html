@@ -670,11 +670,11 @@ async function analisarPrescricao(p) {
       <div style="font-weight:700;color:var(--azul);font-size:13px;margin-bottom:8px">🔗 Verificar interações online</div>
       <div style="font-size:12px;color:var(--texto-sec);margin-bottom:10px">Clique para abrir com os medicamentos já preenchidos:</div>
       <div style="display:flex;flex-direction:column;gap:6px">
-        <a href="${montarLinkDrugs(p.medicamentos)}" target="_blank"
-          style="display:flex;align-items:center;gap:8px;padding:9px 12px;background:white;border:1px solid #B5D3F3;border-radius:var(--r-sm);font-size:12px;font-weight:600;color:var(--azul);text-decoration:none">
-          💊 Abrir no Drugs.com Interaction Checker
+        <button onclick="abrirDrugs(${JSON.stringify(p.medicamentos).replace(/"/g,'&quot;')})"
+          style="display:flex;align-items:center;gap:8px;padding:9px 12px;background:white;border:1px solid #B5D3F3;border-radius:var(--r-sm);font-size:12px;font-weight:600;color:var(--azul);cursor:pointer;text-align:left">
+          💊 Abrir Drugs.com + copiar lista de medicamentos
           <span style="font-size:10px;opacity:.7;margin-left:auto">${p.medicamentos?.length||0} medicamentos →</span>
-        </a>
+        </button>
         <a href="https://reference.medscape.com/drug-interactionchecker" target="_blank"
           style="display:flex;align-items:center;gap:8px;padding:9px 12px;background:white;border:1px solid #B5D3F3;border-radius:var(--r-sm);font-size:12px;font-weight:600;color:var(--azul);text-decoration:none">
           🏥 Abrir no Medscape Drug Interaction Checker
@@ -1220,6 +1220,24 @@ async function verificarBeers(nomeMed, pacId) {
     el.innerHTML = `<div style="font-size:12px;color:var(--texto-ter);margin-top:8px">⚠️ Não foi possível verificar agora. Salve e confira manualmente.</div>`;
     window._beersAlerta = { alerta: false, motivo: null };
   }
+}
+
+function abrirDrugs(medicamentos) {
+  // Monta lista com nomes genéricos para colar no Drugs.com
+  const lista = (medicamentos||[]).map(m => {
+    // Pega só o nome genérico (primeira palavra, sem dose/forma)
+    return m.nome.split(' ')[0].toLowerCase();
+  }).join('\n');
+
+  // Copia para área de transferência
+  navigator.clipboard.writeText(lista).then(() => {
+    toast('📋 Lista copiada! Cole um por um no Drugs.com');
+  }).catch(() => {
+    toast('Abrindo Drugs.com — liste os medicamentos manualmente');
+  });
+
+  // Abre o Drugs.com
+  window.open('https://www.drugs.com/interaction/list/', '_blank');
 }
 
 function montarLinkDrugs(medicamentos) {
