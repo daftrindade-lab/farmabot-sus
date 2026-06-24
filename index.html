@@ -1353,6 +1353,8 @@ async function excluirPaciente(id) {
     renderPacientes();
   } catch(e) { toast('Erro ao excluir paciente', 'err'); }
 }
+
+function editarPaciente(p) {
   const condsAtuais = p.condicoes || [];
   window._editCondsTemp = [...condsAtuais];
   abrirModal(`Editar: ${p.nome}`,`
