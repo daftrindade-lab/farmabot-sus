@@ -747,23 +747,16 @@ Analise considerando:
 Seja objetivo e prático. Use linguagem que um farmacêutico do SUS entenda. Formate com marcadores claros.`;
 
   // Tenta Gemini (gratuito) primeiro, depois Claude como fallback
-  const GEMINI_KEY = 'AQ.Ab8RN6LnLX1yCHhfZtCFupmKN1ESbT4_nJBm4owXQNSEaJDGxA';
+  const GEMINI_KEY = process.env.GEMINI_KEY; // não usado no frontend — chave fica no servidor
   try {
-    // Tenta com endpoint v1beta (suporta ambos os formatos de chave)
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_KEY}`,
-      {
-        method: 'POST',
-        headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({
-          contents:[{parts:[{text: prompt}]}],
-          generationConfig:{maxOutputTokens:1000,temperature:0.3}
-        })
-      }
-    );
+    const res = await fetch(`${BACKEND}/api/gemini`, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ prompt })
+    });
     const d = await res.json();
-    const texto = d.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!texto) throw new Error('Sem resposta Gemini');
+    const texto = d.texto;
+    if (!texto) throw new Error(d.erro || 'Sem resposta Gemini');
     el.innerHTML = `
       <div style="font-size:11px;color:var(--roxo);margin-bottom:8px;font-weight:600">🤖 Análise gerada por Gemini 1.5 Flash</div>
       <div style="font-size:12px;line-height:1.7;white-space:pre-wrap;color:var(--texto)">${texto}</div>`;
