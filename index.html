@@ -761,7 +761,7 @@ Seja objetivo e prático. Use linguagem que um farmacêutico do SUS entenda. For
     const texto = d.texto;
     if (!texto) throw new Error(d.erro || 'Sem resposta Gemini');
     el.innerHTML = `
-      <div style="font-size:11px;color:var(--roxo);margin-bottom:8px;font-weight:600">🤖 Análise gerada por Gemini 1.5 Flash</div>
+      <div style="font-size:11px;color:var(--roxo);margin-bottom:8px;font-weight:600">🤖 Análise gerada por Llama 3.3 (Groq)</div>
       <div style="font-size:12px;line-height:1.7;white-space:pre-wrap;color:var(--texto)">${texto}</div>`;
   } catch(e) {
     // Fallback: Claude via backend
