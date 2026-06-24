@@ -747,7 +747,6 @@ Analise considerando:
 Seja objetivo e prático. Use linguagem que um farmacêutico do SUS entenda. Formate com marcadores claros.`;
 
   // Tenta Gemini (gratuito) primeiro, depois Claude como fallback
-  const GEMINI_KEY = process.env.GEMINI_KEY; // não usado no frontend — chave fica no servidor
   try {
     const controller = new AbortController();
     const tid = setTimeout(() => controller.abort(), 90000);
