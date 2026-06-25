@@ -1095,22 +1095,88 @@ function renderHorariosSelecionados() {
 }
 
 async function enviarOrientacoes(p, meds) {
+  const medicamentos = meds || p.medicamentos || [];
+  if (!medicamentos.length) { toast('Paciente não tem medicamentos cadastrados', 'err'); return; }
+  if (!p.telefone) { toast('Paciente não tem telefone cadastrado', 'err'); return; }
+
+  // Monta prévia da mensagem localmente
+  const primeiroNome = (p.nome || '').split(' ')[0];
+  const horariosMeds = medicamentos.map(m => `• ${m.nome}: ${(m.horarios||[]).join(', ')}`).join('\n');
+
+  // Orientações fixas
+  const ORIENTACOES = {
+    'METFORMINA': ['Tome sempre junto com as refeições para evitar enjoo.','Nunca pare sem orientação médica.','Beba bastante água.'],
+    'GLIBENCLAMIDA': ['Tome 30 min antes do café da manhã.','Nunca pule refeições — pode causar tontura (hipoglicemia).','Se sentir tremores ou suor frio, coma algo doce imediatamente.'],
+    'INSULINA': ['Aplique sempre no mesmo horário.','Guarde na geladeira (não no freezer).','Alterne os locais de aplicação.'],
+    'CAPTOPRIL': ['Tome em jejum, 1 hora antes das refeições.','Pode causar tosse seca — avise o médico se incomodar.'],
+    'ENALAPRIL': ['Tome sempre no mesmo horário.','Evite sal em excesso.'],
+    'LOSARTANA': ['Pode ser tomada com ou sem alimentos.','Levante-se devagar para evitar tontura.'],
+    'ANLODIPINO': ['Não tome suco de toranja (grapefruit).','Se sentir inchaço nos pés, avise o médico.'],
+    'ATENOLOL': ['Nunca pare de tomar de repente.','Pode causar cansaço no início.'],
+    'CARVEDILOL': ['Tome junto com as refeições.','Nunca interrompa sem orientação médica.'],
+    'HIDROCLOROTIAZIDA': ['Tome pela manhã para não atrapalhar o sono.','Aumente alimentos ricos em potássio (banana, laranja).'],
+    'FUROSEMIDA': ['Tome pela manhã — causa aumento de urina.','Repor potássio com alimentação.'],
+    'SINVASTATINA': ['Tome à noite, antes de dormir.','Se sentir dor muscular forte, avise o médico.'],
+    'ROSUVASTATINA': ['Pode ser tomada a qualquer hora.','Se sentir dor muscular forte, avise o médico.'],
+    'OMEPRAZOL': ['Tome em jejum, 30 a 60 min antes do café.','Engolha inteiro — não mastigue.'],
+    'LEVOTIROXINA': ['Tome em jejum, 30 a 60 min antes do café.','Não tome junto com leite ou cálcio.'],
+    'PREDNISONA': ['Tome junto com o café da manhã.','Nunca pare de tomar de repente.'],
+    'DIPIRONA': ['Use apenas quando necessário.','Respeite o intervalo mínimo de 6 horas.'],
+    'AMIODARONA': ['Evite exposição prolongada ao sol.','Faça exames de tireoide e fígado regularmente.'],
+    'DIGOXINA': ['Tome sempre no mesmo horário.','Avise o médico se sentir náusea ou visão amarelada.'],
+    'CLOPIDOGREL': ['Avise dentistas e médicos que usa esse remédio antes de procedimentos.'],
+    'CLONAZEPAM': ['Não beba álcool.','Não dirija — causa sonolência.','Não pare de tomar de repente.'],
+    'FLUOXETINA': ['O efeito leva 2 a 4 semanas — não desista.','Não pare de tomar de repente.'],
+    'AMITRIPTILINA': ['Tome à noite — causa sonolência.','Não beba álcool.'],
+  };
+
+  let blocoOrientacoes = '';
+  medicamentos.forEach(med => {
+    const nome = med.nome.toUpperCase();
+    for (const [chave, orients] of Object.entries(ORIENTACOES)) {
+      if (nome.includes(chave)) {
+        blocoOrientacoes += `\n💊 *${med.nome}*\n${orients.map(o=>`• ${o}`).join('\n')}\n`;
+        break;
+      }
+    }
+  });
+
+  const msgPrevia =
+    `👋 Olá, *${primeiroNome}*! Aqui estão as orientações sobre seus medicamentos:\n\n` +
+    `⏰ *Seus horários:*\n${horariosMeds}` +
+    (blocoOrientacoes ? `\n\n📋 *Orientações importantes:*${blocoOrientacoes}` : '') +
+    `\n\n❓ Qualquer dúvida, pode responder aqui. Sua saúde é nossa prioridade! 💚`;
+
+  // Mostra prévia para aprovação do farmacêutico
+  abrirModal('📤 Prévia das orientações', `
+    <p style="font-size:12px;color:var(--texto-sec);margin-bottom:12px">
+      Revise a mensagem abaixo antes de enviar para <strong>${p.nome}</strong> (${p.telefone}):
+    </p>
+    <div style="background:var(--verde-bg);border:1px solid var(--verde-borda);border-radius:var(--r);padding:14px;max-height:320px;overflow-y:auto;">
+      <textarea id="preview-msg" style="width:100%;border:none;background:transparent;font-size:12px;line-height:1.7;resize:vertical;min-height:220px;outline:none;font-family:inherit;color:var(--texto)">${msgPrevia}</textarea>
+    </div>
+    <p style="font-size:11px;color:var(--texto-ter);margin-top:8px">✏️ Você pode editar a mensagem antes de enviar.</p>
+    <div class="modal-acoes">
+      <button class="btn btn-c" onclick="fecharModal()">Cancelar</button>
+      <button class="btn btn-v" onclick="confirmarEnvioOrientacoes('${p.telefone}','${p.id}')">✅ Enviar para o paciente</button>
+    </div>`);
+}
+
+async function confirmarEnvioOrientacoes(telefone, pacienteId) {
+  const msg = document.getElementById('preview-msg')?.value;
+  if (!msg) return;
+  const btn = document.querySelector('.modal-acoes .btn-v');
+  if (btn) { btn.innerHTML = '<span class="spin"></span> Enviando...'; btn.disabled = true; }
   try {
     const res = await fetch(`${BACKEND}/orientacoes`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-admin-token': AT },
-      body: JSON.stringify({
-        paciente_id: p.id,
-        telefone: p.telefone,
-        nome_paciente: p.nome,
-        medicamentos: meds || p.medicamentos || [],
-        condicoes: p.condicoes || []
-      })
+      body: JSON.stringify({ telefone, mensagem_customizada: msg })
     });
     const d = await res.json();
-    if (d.ok) toast('📤 Orientações enviadas ao paciente!');
-    else toast('Orientações: ' + (d.erro || 'erro'), 'err');
-  } catch(e) { toast('Erro ao enviar orientações', 'err'); }
+    if (d.ok) { toast('📤 Orientações enviadas ao paciente!'); fecharModal(); }
+    else toast(d.erro || 'Erro ao enviar', 'err');
+  } catch(e) { toast('Erro de conexão', 'err'); }
 }
 
 function voltarParaPaciente() {
