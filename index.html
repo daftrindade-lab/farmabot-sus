@@ -300,6 +300,7 @@ function renderSidebar() {
     {id:'dashboard',icon:'📊',label:'Início'},
     {id:'pacientes',icon:'👥',label:'Meus pacientes'},
     {id:'renovacoes',icon:'📋',label:'Renovações',badge:'renov'},
+    {id:'familia',icon:'👨‍👩‍👧',label:'Farmácia da família'},
     {id:'conversas',icon:'💬',label:'Conversas',badge:'conv'},
   ];
   document.getElementById('sidebar').innerHTML =
@@ -323,6 +324,7 @@ function irSecao(id) {
     farmaceuticos: renderFarmaceuticos,
     pacientes: renderPacientes,
     renovacoes: renderRenovacoes,
+    familia: renderFamilia,
     conversas: ()=>renderConversas(false),
     'conversas-gestor': ()=>renderConversas(true),
   };
@@ -1696,6 +1698,158 @@ async function renderRenovacoes() {
           <span class="badge ${a.status==='pendente'?'ba':'bv'}">${a.status}</span>
         </div>`).join('') : '<div class="vazia"><em>📬</em>Nenhum alerta enviado ainda</div>'}
     </div>`;
+}
+
+// ── Farmácia da família ───────────────────────────────────────────────────────
+async function renderFamilia() {
+  const pacientes = await sb(`farmabot_pacientes?ubs_nome=eq.${enc(U.ubs)}&order=nome.asc&select=id,nome,medicamentos,condicoes,telefone`);
+  const lista = Array.isArray(pacientes) ? pacientes : [];
+  // Só polimedicados (3+ medicamentos)
+  const polimedicados = lista.filter(p => (p.medicamentos||[]).length >= 3);
+
+  document.getElementById('main-content').innerHTML = `
+    <div class="sec-titulo">👨‍👩‍👧 Farmácia da família</div>
+    <div class="card" style="margin-bottom:16px;background:var(--azul-bg);border-color:#B5D3F3">
+      <div style="font-size:13px;color:var(--azul)">
+        <strong>O que é?</strong> Vincule pacientes da mesma família para cruzar prescrições e detectar interações medicamentosas entre os membros. Disponível para pacientes com 3 ou mais medicamentos.
+      </div>
+    </div>
+
+    <div class="two-col">
+      <div class="card">
+        <div class="card-tit">Vincular familiares</div>
+        <div class="fg">
+          <label class="lbl">Paciente</label>
+          <select class="inp" id="fam-pac1">
+            <option value="">— Selecione —</option>
+            ${polimedicados.map(p=>`<option value="${p.id}">${p.nome} (${(p.medicamentos||[]).length} meds)</option>`).join('')}
+          </select>
+        </div>
+        <div class="fg">
+          <label class="lbl">Relação</label>
+          <select class="inp" id="fam-relacao">
+            <option value="cônjuge">Cônjuge</option>
+            <option value="filho(a)">Filho(a)</option>
+            <option value="pai/mãe">Pai/Mãe</option>
+            <option value="irmão(ã)">Irmão(ã)</option>
+            <option value="familiar">Familiar</option>
+          </select>
+        </div>
+        <div class="fg">
+          <label class="lbl">Familiar</label>
+          <select class="inp" id="fam-pac2">
+            <option value="">— Selecione —</option>
+            ${polimedicados.map(p=>`<option value="${p.id}">${p.nome} (${(p.medicamentos||[]).length} meds)</option>`).join('')}
+          </select>
+        </div>
+        <button class="btn btn-v btn-full" onclick="vincularFamilia(this)">Vincular e analisar interações</button>
+      </div>
+
+      <div class="card">
+        <div class="card-tit">Pacientes polimedicados (${polimedicados.length})</div>
+        ${polimedicados.length ? polimedicados.map(p=>`
+          <div class="il" style="cursor:pointer" onclick="verFamiliaCompleta('${p.id}')">
+            <div class="av av-az">👨‍👩‍👧</div>
+            <div class="ii">
+              <div class="in">${p.nome}</div>
+              <div class="is">${(p.medicamentos||[]).length} medicamentos · ${(p.condicoes||[]).join(', ')||'—'}</div>
+            </div>
+            <span style="font-size:12px;color:var(--azul)">Ver família →</span>
+          </div>`).join('') :
+          '<div class="vazia"><em>👨‍👩‍👧</em>Nenhum paciente polimedicado cadastrado</div>'}
+      </div>
+    </div>
+    <div id="familia-resultado"></div>`;
+}
+
+async function vincularFamilia(btn) {
+  const pac1 = document.getElementById('fam-pac1').value;
+  const pac2 = document.getElementById('fam-pac2').value;
+  const relacao = document.getElementById('fam-relacao').value;
+  if (!pac1 || !pac2) { toast('Selecione os dois pacientes', 'err'); return; }
+  if (pac1 === pac2) { toast('Selecione pacientes diferentes', 'err'); return; }
+
+  setBtnLoad(btn, true);
+  try {
+    const r = await fetch(`${BACKEND}/familia`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-admin-token': AT },
+      body: JSON.stringify({ paciente_id: pac1, familiar_id: pac2, relacao })
+    });
+    const d = await r.json();
+    if (d.ok) {
+      toast('✅ Vínculo criado! Analisando interações...');
+      await verFamiliaCompleta(pac1);
+    } else toast(d.erro || 'Erro', 'err');
+  } catch(e) { toast('Erro de conexão', 'err'); }
+  setBtnLoad(btn, false);
+}
+
+async function verFamiliaCompleta(pacienteId) {
+  const el = document.getElementById('familia-resultado');
+  if (!el) return;
+  el.innerHTML = '<div style="text-align:center;padding:20px;color:var(--texto-ter)"><span class="spin" style="border-color:rgba(0,0,0,.1);border-top-color:var(--azul)"></span> Analisando família...</div>';
+
+  try {
+    // Busca vínculos
+    const r = await fetch(`${BACKEND}/familia/${pacienteId}`, {
+      headers: { 'x-admin-token': AT }
+    });
+    const d = await r.json();
+    const vinculos = d.vinculos || [];
+
+    if (!vinculos.length) {
+      el.innerHTML = '<div class="card"><div class="vazia"><em>👨‍👩‍👧</em>Nenhum familiar vinculado ainda</div></div>';
+      return;
+    }
+
+    // Busca dados de todos os membros da família
+    const ids = new Set([pacienteId]);
+    vinculos.forEach(v => { ids.add(v.paciente_id); ids.add(v.familiar_id); });
+    const membros = await sb(`farmabot_pacientes?id=in.(${Array.from(ids).join(',')})&select=id,nome,medicamentos,condicoes`);
+
+    // Cruza todos os medicamentos
+    const todosMeds = [];
+    (Array.isArray(membros) ? membros : []).forEach(m => {
+      (m.medicamentos||[]).forEach(med => {
+        todosMeds.push({ paciente: m.nome, med: med.nome });
+      });
+    });
+
+    // Checa interações cruzadas
+    const interacoesCruzadas = [];
+    for (let i = 0; i < todosMeds.length; i++) {
+      for (let j = i + 1; j < todosMeds.length; j++) {
+        if (todosMeds[i].paciente === todosMeds[j].paciente) continue; // mesma pessoa
+        const ints = checarInteracoes(todosMeds[i].med.toUpperCase(), [todosMeds[j].med.toUpperCase()]);
+        ints.forEach(int => {
+          interacoesCruzadas.push(`⚠ *${todosMeds[i].paciente}* (${todosMeds[i].med}) + *${todosMeds[j].paciente}* (${todosMeds[j].med}): ${int}`);
+        });
+      }
+    }
+
+    el.innerHTML = `
+      <div class="card" style="margin-top:16px">
+        <div class="card-tit">👨‍👩‍👧 Prescrição da família</div>
+        ${(Array.isArray(membros) ? membros : []).map(m=>`
+          <div style="border:1px solid var(--borda);border-radius:var(--r);padding:12px;margin-bottom:10px">
+            <div style="font-weight:700;margin-bottom:6px">👤 ${m.nome}</div>
+            <div style="display:flex;flex-wrap:wrap;gap:4px">
+              ${(m.medicamentos||[]).map(med=>`<span class="med-chip ${med.beers_alerta?'med-chip-r':''}">${med.nome}</span>`).join('')||'<span style="color:var(--texto-ter);font-size:12px">Sem medicamentos</span>'}
+            </div>
+          </div>`).join('')}
+
+        ${interacoesCruzadas.length ? `
+          <div class="interacao-box" style="margin-top:12px">
+            <div class="interacao-tit">⚠️ Interações entre membros da família (${interacoesCruzadas.length})</div>
+            ${interacoesCruzadas.map(i=>`<div class="interacao-li" style="margin-bottom:6px">${i}</div>`).join('')}
+            <div style="font-size:11px;color:var(--ambar);margin-top:8px">Atenção: membros da mesma casa podem usar os medicamentos uns dos outros. Oriente sobre os riscos.</div>
+          </div>` : `
+          <div style="background:var(--verde-bg);border:1px solid var(--verde-borda);border-radius:var(--r);padding:10px;margin-top:12px;font-size:12px;color:var(--verde)">
+            ✅ Nenhuma interação medicamentosa entre os membros da família detectada
+          </div>`}
+      </div>`;
+  } catch(e) { el.innerHTML = '<div class="card"><div class="vazia"><em>⚠️</em>Erro ao carregar dados da família</div></div>'; }
 }
 
 async function verificarPendencias() {
