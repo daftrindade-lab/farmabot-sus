@@ -2000,7 +2000,7 @@ async function verFamiliaCompleta(pacienteId) {
 // ── Queixas / Reações adversas ────────────────────────────────────────────────
 async function renderQueixas() {
   const ubsEnc = enc(U.ubs);
-  const data = await sb(`farmabot_queixas?ubs_nome=eq.${ubsEnc}&order=criado_em.desc&limit=100`);
+  const data = await sb(`farmabot_queixas?ubs_nome=ilike.${ubsEnc}&order=criado_em.desc&limit=100`);
   const lista = Array.isArray(data) ? data : [];
   const pendentes = lista.filter(q => q.status === 'pendente');
 
