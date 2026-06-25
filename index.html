@@ -2109,9 +2109,11 @@ async function salvarQueixa(btn) {
     });
     const d = await r.json();
     if (d.ok) {
-      toast(grav==='grave' ? '🚨 Queixa grave registrada! Notificação enviada.' : '✅ Queixa registrada!');
+      toast(grav==='grave' ? '🚨 Queixa grave registrada!' : '✅ Queixa registrada!');
       fecharModal();
-      renderQueixas();
+      await renderQueixas();
+      // Muda para aba "Todas" para mostrar a queixa recém-registrada
+      setTimeout(() => filtrarQueixas('todas'), 100);
     } else toast(d.erro || 'Erro', 'err');
   } catch(e) { toast('Erro de conexão', 'err'); }
   setBtnLoad(btn, false);
