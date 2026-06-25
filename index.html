@@ -2031,7 +2031,9 @@ function filtrarQueixas(tipo) {
 
 function renderListaQueixas(lista) {
   if (!lista.length) return '<div class="vazia"><em>✅</em>Nenhuma queixa registrada</div>';
-  return lista.map(q => {
+  // Armazena queixas globalmente para acesso pelo botão Ver
+  window._queixasCache = lista;
+  return lista.map((q, idx) => {
     const corGrav = q.gravidade==='grave' ? 'vermelho' : q.gravidade==='moderada' ? 'ambar' : 'cinza';
     return `<div class="il">
       <div class="av av-${corGrav==='vermelho'?'r':corGrav==='ambar'?'a':'v'}">⚠️</div>
@@ -2042,10 +2044,16 @@ function renderListaQueixas(lista) {
       </div>
       <div class="ia">
         ${q.status==='pendente' ? `<button class="btn btn-v btn-sm" onclick="resolverQueixa('${q.id}')">✅ Resolver</button>` : '<span class="badge bv">resolvida</span>'}
-        <button class="btn btn-az btn-sm" onclick="verQueixa(${JSON.stringify(q).replace(/'/g,'&#39;')})">Ver</button>
+        <button class="btn btn-az btn-sm" onclick="verQueixaIdx(${idx})">Ver</button>
       </div>
     </div>`;
   }).join('');
+}
+
+function verQueixaIdx(idx) {
+  const q = window._queixasCache?.[idx];
+  if (!q) return;
+  verQueixa(q);
 }
 
 function abrirRegistrarQueixa() {
