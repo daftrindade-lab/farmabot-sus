@@ -295,12 +295,14 @@ function renderSidebar() {
     {id:'dashboard',icon:'📊',label:'Dashboard'},
     {id:'ubs',icon:'🏥',label:'UBSs'},
     {id:'farmaceuticos',icon:'👩‍⚕️',label:'Farmacêuticos'},
+    {id:'educacao',icon:'📚',label:'Educação em Saúde'},
     {id:'conversas-gestor',icon:'💬',label:'Conversas',badge:'conv'},
   ] : [
     {id:'dashboard',icon:'📊',label:'Início'},
     {id:'pacientes',icon:'👥',label:'Meus pacientes'},
     {id:'renovacoes',icon:'📋',label:'Renovações',badge:'renov'},
     {id:'familia',icon:'👨‍👩‍👧',label:'Farmácia da família'},
+    {id:'educacao',icon:'📚',label:'Educação em Saúde'},
     {id:'conversas',icon:'💬',label:'Conversas',badge:'conv'},
   ];
   document.getElementById('sidebar').innerHTML =
@@ -325,6 +327,7 @@ function irSecao(id) {
     pacientes: renderPacientes,
     renovacoes: renderRenovacoes,
     familia: renderFamilia,
+    educacao: renderEducacao,
     conversas: ()=>renderConversas(false),
     'conversas-gestor': ()=>renderConversas(true),
   };
@@ -1700,7 +1703,145 @@ async function renderRenovacoes() {
     </div>`;
 }
 
-// ── Farmácia da família ───────────────────────────────────────────────────────
+// ── Educação em Saúde ─────────────────────────────────────────────────────────
+const DICAS_EDITAVEIS = {
+  'has_1': { titulo: 'HAS — Alimentação', categoria: 'HAS', semana: 'ímpar', texto: '❤️ *Dica sobre Pressão Alta*\n\nReduzir o sal na alimentação é um dos passos mais importantes para controlar a pressão. Evite alimentos industrializados, embutidos e temperos prontos. Prefira temperos naturais como alho, cebola e ervas.' },
+  'has_2': { titulo: 'HAS — Exercício', categoria: 'HAS', semana: 'ímpar', texto: '❤️ *Dica sobre Pressão Alta*\n\nCaminhar 30 minutos por dia, 5 vezes por semana, ajuda a baixar a pressão naturalmente. Comece devagar e aumente o ritmo gradualmente.' },
+  'has_3': { titulo: 'HAS — Monitoramento', categoria: 'HAS', semana: 'ímpar', texto: '❤️ *Dica sobre Pressão Alta*\n\nMeça sua pressão regularmente e anote os valores. Leve esse registro às consultas. Pressão ideal: abaixo de 130x80 mmHg.' },
+  'dm_1': { titulo: 'DM — Alimentação', categoria: 'DM', semana: 'ímpar', texto: '🩺 *Dica sobre Diabetes*\n\nEvite açúcar, refrigerantes e sucos industrializados. Prefira frutas inteiras, verduras e alimentos integrais. Coma em pequenas porções várias vezes ao dia.' },
+  'dm_2': { titulo: 'DM — Cuidado com os pés', categoria: 'DM', semana: 'ímpar', texto: '🩺 *Dica sobre Diabetes*\n\nCuide dos seus pés todos os dias: lave com água morna, seque bem entre os dedos e observe se tem feridas. Diabéticos têm mais dificuldade de cicatrizar.' },
+  'dm_3': { titulo: 'DM — Glicemia', categoria: 'DM', semana: 'ímpar', texto: '🩺 *Dica sobre Diabetes*\n\nFaça a glicemia em jejum regularmente. Valores normais: entre 70 e 100 mg/dL. Se acima de 250 mg/dL com sintomas (sede excessiva, urina frequente), procure atendimento.' },
+  'med_1': { titulo: 'Medicamentos — Doses esquecidas', categoria: 'Medicamentos', semana: 'par', texto: '💊 *Dica sobre seus remédios*\n\nSe esquecer de tomar uma dose, tome assim que lembrar — a não ser que esteja quase na hora da próxima. Nesse caso, pule a dose. Nunca tome duas doses de uma vez.' },
+  'med_2': { titulo: 'Medicamentos — Partir comprimido', categoria: 'Medicamentos', semana: 'par', texto: '💊 *Dica sobre seus remédios*\n\nAlguns remédios não podem ser partidos ou mastigados — como os de liberação prolongada. Sempre verifique com o farmacêutico se pode ou não partir o comprimido.' },
+  'med_3': { titulo: 'Medicamentos — Interações', categoria: 'Medicamentos', semana: 'par', texto: '💊 *Dica sobre seus remédios*\n\nAvise sempre seu médico e dentista sobre todos os remédios que está tomando, incluindo vitaminas e remédios caseiros. Alguns podem interagir entre si.' },
+  'med_4': { titulo: 'Medicamentos — Validade', categoria: 'Medicamentos', semana: 'par', texto: '💊 *Dica sobre seus remédios*\n\nNão tome remédios vencidos. Verifique a data de validade antes de usar e descarte medicamentos vencidos na farmácia — não jogue no lixo comum.' },
+  'med_5': { titulo: 'Medicamentos — Armazenamento', categoria: 'Medicamentos', semana: 'par', texto: '💊 *Dica sobre seus remédios*\n\nGuarde seus remédios em local fresco, seco e sem luz direta do sol. Evite guardar no banheiro ou cozinha — o calor e a umidade estragam os medicamentos.' },
+};
+
+// Carrega dicas do localStorage para persistir edições
+function carregarDicasLocais() {
+  try {
+    const salvo = localStorage.getItem('farmabot_dicas');
+    if (salvo) {
+      const dicas = JSON.parse(salvo);
+      Object.entries(dicas).forEach(([k,v]) => {
+        if (DICAS_EDITAVEIS[k]) DICAS_EDITAVEIS[k].texto = v;
+      });
+    }
+  } catch(e) {}
+}
+
+function salvarDicaLocal(id, texto) {
+  try {
+    const salvo = JSON.parse(localStorage.getItem('farmabot_dicas') || '{}');
+    salvo[id] = texto;
+    localStorage.setItem('farmabot_dicas', JSON.stringify(salvo));
+  } catch(e) {}
+}
+
+carregarDicasLocais();
+
+async function renderEducacao() {
+  const isGestor = U.perfil === 'gestor';
+  const categorias = ['HAS', 'DM', 'Medicamentos'];
+
+  document.getElementById('main-content').innerHTML = `
+    <div class="sec-titulo">📚 Educação em Saúde</div>
+
+    <div class="card" style="margin-bottom:16px;background:var(--verde-bg);border-color:var(--verde-borda)">
+      <div style="font-size:13px;color:var(--verde)">
+        <strong>📅 Envio automático:</strong> toda segunda-feira às 8h, cada paciente recebe uma dica personalizada conforme suas condições de saúde.
+        Semanas ímpares = dica sobre a condição (HAS ou DM). Semanas pares = dica sobre medicamentos.
+      </div>
+    </div>
+
+    <div class="tabs">
+      ${categorias.map((c,i)=>`<button class="tab ${i===0?'ativa':''}" id="tab-edu-${c}" onclick="filtrarDicas('${c}')">${c==='HAS'?'❤️ HAS':c==='DM'?'🩺 DM':'💊 Medicamentos'}</button>`).join('')}
+    </div>
+
+    ${categorias.map((cat,i)=>`
+    <div class="tab-painel ${i===0?'ativo':''}" id="edu-${cat}">
+      ${Object.entries(DICAS_EDITAVEIS).filter(([,d])=>d.categoria===cat).map(([id,dica])=>`
+        <div class="card" style="margin-bottom:12px" id="card-dica-${id}">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+            <div>
+              <strong style="font-size:13px">${dica.titulo}</strong>
+              <span class="badge ${dica.semana==='ímpar'?'bv':'ba'}" style="margin-left:8px">Semana ${dica.semana}</span>
+            </div>
+            <div style="display:flex;gap:6px">
+              <button class="btn btn-az btn-sm" onclick="previewDica('${id}')">👁 Preview</button>
+              <button class="btn btn-v btn-sm" onclick="enviarDicaAgora('${id}')">📤 Enviar agora</button>
+            </div>
+          </div>
+          <textarea id="txt-dica-${id}" style="width:100%;border:1.5px solid var(--borda);border-radius:8px;padding:10px;font-size:12px;line-height:1.7;resize:vertical;min-height:100px;outline:none;font-family:inherit"
+            onchange="salvarDicaLocal('${id}',this.value)">${dica.texto}</textarea>
+          <div style="font-size:11px;color:var(--texto-ter);margin-top:4px">✏️ Edite o texto acima — as alterações ficam salvas automaticamente no seu navegador.</div>
+        </div>`).join('')}
+    </div>`).join('')}`;
+}
+
+function filtrarDicas(cat) {
+  ['HAS','DM','Medicamentos'].forEach(c => {
+    document.getElementById(`tab-edu-${c}`)?.classList.toggle('ativa', c===cat);
+    document.getElementById(`edu-${c}`)?.classList.toggle('ativo', c===cat);
+  });
+}
+
+function previewDica(id) {
+  const dica = DICAS_EDITAVEIS[id];
+  const textoAtual = document.getElementById(`txt-dica-${id}`)?.value || dica.texto;
+  const msgFinal = `🌟 Olá, *[Nome do paciente]*! Aqui está a dica de saúde desta semana:\n\n${textoAtual}\n\n_Sua Assistência Farmacêutica de Trindade-GO_ 💚`;
+
+  abrirModal(`👁 Preview — ${dica.titulo}`, `
+    <p style="font-size:12px;color:var(--texto-sec);margin-bottom:12px">É assim que o paciente vai receber a mensagem no WhatsApp:</p>
+    <div style="background:#ECE5DD;border-radius:12px;padding:16px;font-family:'Segoe UI',sans-serif">
+      <div style="background:white;border-radius:8px;padding:12px;max-width:85%;font-size:13px;line-height:1.7;white-space:pre-wrap;box-shadow:0 1px 2px rgba(0,0,0,.1)">${msgFinal.replace(/\*(.*?)\*/g,'<strong>$1</strong>').replace(/_(.+?)_/g,'<em>$1</em>')}</div>
+    </div>
+    <div class="modal-acoes">
+      <button class="btn btn-c" onclick="fecharModal()">Fechar</button>
+      <button class="btn btn-v" onclick="fecharModal();enviarDicaAgora('${id}')">📤 Enviar esta dica agora</button>
+    </div>`);
+}
+
+async function enviarDicaAgora(id) {
+  const dica = DICAS_EDITAVEIS[id];
+  const textoAtual = document.getElementById(`txt-dica-${id}`)?.value || dica.texto;
+
+  // Confirma antes de enviar para todos
+  abrirModal(`📤 Enviar dica agora`, `
+    <p style="font-size:14px;margin-bottom:12px">Enviar <strong>"${dica.titulo}"</strong> para todos os pacientes elegíveis agora?</p>
+    <div style="background:var(--ambar-bg);border:1px solid var(--ambar-borda);border-radius:var(--r);padding:10px;font-size:12px;color:var(--ambar);margin-bottom:12px">
+      ⚠️ Esta ação enviará mensagens WhatsApp para todos os pacientes cadastrados com telefone${dica.categoria!=='Medicamentos'?' que têm '+dica.categoria:''}. Confirme apenas se a Meta Business estiver verificada.
+    </div>
+    <div class="modal-acoes">
+      <button class="btn btn-c" onclick="fecharModal()">Cancelar</button>
+      <button class="btn btn-v" onclick="confirmarEnvioEducacao('${id}')">✅ Confirmar envio</button>
+    </div>`);
+}
+
+async function confirmarEnvioEducacao(id) {
+  const dica = DICAS_EDITAVEIS[id];
+  const textoAtual = document.getElementById(`txt-dica-${id}`)?.value || dica.texto;
+  const btn = document.querySelector('.modal-acoes .btn-v');
+  if (btn) { btn.innerHTML = '<span class="spin"></span> Enviando...'; btn.disabled = true; }
+
+  try {
+    const res = await fetch(`${BACKEND}/educacao/enviar`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-admin-token': AT },
+      body: JSON.stringify({
+        texto: textoAtual,
+        categoria: dica.categoria,
+        ubs: U.perfil === 'gestor' ? null : U.ubs // gestor envia para todos, farmacêutico só para sua UBS
+      })
+    });
+    const d = await res.json();
+    if (d.ok) {
+      toast(`📤 Dica enviada para ${d.enviados} paciente(s)!`);
+      fecharModal();
+    } else toast(d.erro || 'Erro ao enviar', 'err');
+  } catch(e) { toast('Erro de conexão', 'err'); }
+}
 async function renderFamilia() {
   const pacientes = await sb(`farmabot_pacientes?ubs_nome=eq.${enc(U.ubs)}&order=nome.asc&select=id,nome,medicamentos,condicoes,telefone`);
   const lista = Array.isArray(pacientes) ? pacientes : [];
