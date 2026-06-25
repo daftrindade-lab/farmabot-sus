@@ -2000,9 +2000,8 @@ async function verFamiliaCompleta(pacienteId) {
 // ── Queixas / Reações adversas ────────────────────────────────────────────────
 async function renderQueixas() {
   const ubsEnc = enc(U.ubs);
-  const r = await fetch(`${BACKEND}/queixas?ubs=${ubsEnc}`, { headers: { 'x-admin-token': AT } });
-  const d = await r.json();
-  const lista = d.queixas || [];
+  const data = await sb(`farmabot_queixas?ubs_nome=eq.${ubsEnc}&order=criado_em.desc&limit=100`);
+  const lista = Array.isArray(data) ? data : [];
   const pendentes = lista.filter(q => q.status === 'pendente');
 
   document.getElementById('main-content').innerHTML = `
@@ -2094,36 +2093,38 @@ async function salvarQueixa(btn) {
   const pac = (window._pacientesQueixa||[]).find(p => p.nome === nome);
 
   try {
-    const r = await fetch(`${BACKEND}/queixa`, {
+    const pac = (window._pacientesQueixa||[]).find(p => p.nome === nome);
+    const payload = {
+      paciente_id: pac?.id || null,
+      paciente_nome: nome || 'Não identificado',
+      telefone: pac?.telefone || null,
+      ubs_nome: U.ubs,
+      descricao: desc,
+      medicamento: med || null,
+      gravidade: grav,
+      status: 'pendente',
+      data_registro: new Date().toLocaleDateString('en-CA')
+    };
+
+    const d = await sb('farmabot_queixas', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-admin-token': AT },
-      body: JSON.stringify({
-        paciente_id: pac?.id || null,
-        paciente_nome: nome || 'Não identificado',
-        telefone: pac?.telefone || null,
-        ubs_nome: U.ubs,
-        descricao: desc,
-        medicamento: med || null,
-        gravidade: grav
-      })
+      body: JSON.stringify(payload)
     });
-    const d = await r.json();
-    if (d.ok) {
+
+    if (!d?.message) {
       toast(grav==='grave' ? '🚨 Queixa grave registrada!' : '✅ Queixa registrada!');
       fecharModal();
       await renderQueixas();
-      // Muda para aba "Todas" para mostrar a queixa recém-registrada
       setTimeout(() => filtrarQueixas('todas'), 100);
-    } else toast(d.erro || 'Erro', 'err');
+    } else toast(d.message || 'Erro ao registrar', 'err');
   } catch(e) { toast('Erro de conexão', 'err'); }
   setBtnLoad(btn, false);
 }
 
 async function resolverQueixa(id) {
   try {
-    await fetch(`${BACKEND}/queixa/${id}`, {
+    await sb(`farmabot_queixas?id=eq.${id}`, {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json', 'x-admin-token': AT },
       body: JSON.stringify({ status: 'resolvida' })
     });
     toast('✅ Queixa marcada como resolvida');
