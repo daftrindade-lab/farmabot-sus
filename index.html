@@ -198,7 +198,7 @@ input,select,textarea{font-family:inherit;}
       <div class="login-icon">💊</div>
       <div><h1>FarmaBot SUS</h1><p>DAF Trindade-GO</p></div>
     </div>
-    <div class="fg"><label class="lbl">Login</label><input class="inp" id="li" placeholder="CPF ou DAF1401" onkeydown="if(event.key==='Enter')login()"></div>
+    <div class="fg"><label class="lbl">Login</label><input class="inp" id="li" placeholder="CPF" onkeydown="if(event.key==='Enter')login()"></div>
     <div class="fg"><label class="lbl">Senha</label><input class="inp" type="password" id="ls" placeholder="Sua senha" onkeydown="if(event.key==='Enter')login()"></div>
     <button class="btn-login-submit" onclick="login()">Entrar</button>
     <div class="err-txt" id="lerr">Login ou senha incorretos.</div>
@@ -644,6 +644,7 @@ function verPaciente(p) {
       <div style="display:flex;gap:6px;flex-wrap:wrap">
         <button class="btn btn-ro btn-sm" onclick='analisarPrescricao(${JSON.stringify(p).replace(/'/g,"&#39;")})'>🔍 Analisar prescrição</button>
         <button class="btn btn-v btn-sm" onclick='abrirAddMed(${JSON.stringify(p).replace(/'/g,"&#39;")})'>➕ Adicionar</button>
+        ${p.telefone ? `<button class="btn btn-az btn-sm" onclick='enviarOrientacoes(${JSON.stringify(p).replace(/'/g,"&#39;")})'>📤 Orientações</button>` : ''}
       </div>
     </div>
     <div id="meds-lista">${renderMedsList(meds)}</div>
@@ -1093,6 +1094,25 @@ function renderHorariosSelecionados() {
     : '';
 }
 
+async function enviarOrientacoes(p, meds) {
+  try {
+    const res = await fetch(`${BACKEND}/orientacoes`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-admin-token': AT },
+      body: JSON.stringify({
+        paciente_id: p.id,
+        telefone: p.telefone,
+        nome_paciente: p.nome,
+        medicamentos: meds || p.medicamentos || [],
+        condicoes: p.condicoes || []
+      })
+    });
+    const d = await res.json();
+    if (d.ok) toast('📤 Orientações enviadas ao paciente!');
+    else toast('Orientações: ' + (d.erro || 'erro'), 'err');
+  } catch(e) { toast('Erro ao enviar orientações', 'err'); }
+}
+
 function voltarParaPaciente() {
   if (_pacAtual) verPaciente(_pacAtual);
   else fecharModal();
@@ -1325,6 +1345,12 @@ async function salvarMed() {
   try {
     await sb(`farmabot_pacientes?id=eq.${p.id}`,{method:'PATCH',body:JSON.stringify({medicamentos:meds})});
     toast('✅ Medicamento adicionado à prescrição!');
+
+    // Envia orientações automaticamente via WhatsApp
+    if (p.telefone) {
+      enviarOrientacoes(p, meds).catch(e => console.error('Orientações:', e));
+    }
+
     window._beersAlerta = null;
     _horariosTemp = [];
     _pacAtual = {...p, medicamentos: meds};
