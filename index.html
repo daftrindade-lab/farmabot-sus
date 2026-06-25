@@ -295,12 +295,14 @@ function renderSidebar() {
     {id:'dashboard',icon:'📊',label:'Dashboard'},
     {id:'ubs',icon:'🏥',label:'UBSs'},
     {id:'farmaceuticos',icon:'👩‍⚕️',label:'Farmacêuticos'},
+    {id:'cobertura',icon:'🗺️',label:'Mapa de cobertura'},
     {id:'educacao',icon:'📚',label:'Educação em Saúde'},
     {id:'conversas-gestor',icon:'💬',label:'Conversas',badge:'conv'},
   ] : [
     {id:'dashboard',icon:'📊',label:'Início'},
     {id:'pacientes',icon:'👥',label:'Meus pacientes'},
     {id:'renovacoes',icon:'📋',label:'Renovações',badge:'renov'},
+    {id:'queixas',icon:'⚠️',label:'Queixas/Reações'},
     {id:'familia',icon:'👨‍👩‍👧',label:'Farmácia da família'},
     {id:'educacao',icon:'📚',label:'Educação em Saúde'},
     {id:'conversas',icon:'💬',label:'Conversas',badge:'conv'},
@@ -324,8 +326,10 @@ function irSecao(id) {
     dashboard: renderDashboard,
     ubs: renderUbs,
     farmaceuticos: renderFarmaceuticos,
+    cobertura: renderCobertura,
     pacientes: renderPacientes,
     renovacoes: renderRenovacoes,
+    queixas: renderQueixas,
     familia: renderFamilia,
     educacao: renderEducacao,
     conversas: ()=>renderConversas(false),
@@ -1991,6 +1995,242 @@ async function verFamiliaCompleta(pacienteId) {
           </div>`}
       </div>`;
   } catch(e) { el.innerHTML = '<div class="card"><div class="vazia"><em>⚠️</em>Erro ao carregar dados da família</div></div>'; }
+}
+
+// ── Queixas / Reações adversas ────────────────────────────────────────────────
+async function renderQueixas() {
+  const ubsEnc = enc(U.ubs);
+  const r = await fetch(`${BACKEND}/queixas?ubs=${ubsEnc}`, { headers: { 'x-admin-token': AT } });
+  const d = await r.json();
+  const lista = d.queixas || [];
+  const pendentes = lista.filter(q => q.status === 'pendente');
+
+  document.getElementById('main-content').innerHTML = `
+    <div class="sec-titulo" style="justify-content:space-between">
+      <span>⚠️ Queixas e Reações adversas</span>
+      <button class="btn btn-v btn-sm" onclick="abrirRegistrarQueixa()">➕ Registrar queixa</button>
+    </div>
+
+    <div class="tabs">
+      <button class="tab ativa" id="tab-q-pend" onclick="filtrarQueixas('pendente')">⏳ Pendentes <span class="nav-badge r">${pendentes.length}</span></button>
+      <button class="tab" id="tab-q-todas" onclick="filtrarQueixas('todas')">Todas (${lista.length})</button>
+    </div>
+
+    <div id="lista-queixas">${renderListaQueixas(pendentes)}</div>`;
+
+  window._queixasTodas = lista;
+  window._queixasPend = pendentes;
+}
+
+function filtrarQueixas(tipo) {
+  document.getElementById('tab-q-pend').classList.toggle('ativa', tipo==='pendente');
+  document.getElementById('tab-q-todas').classList.toggle('ativa', tipo==='todas');
+  document.getElementById('lista-queixas').innerHTML = renderListaQueixas(
+    tipo==='pendente' ? window._queixasPend : window._queixasTodas
+  );
+}
+
+function renderListaQueixas(lista) {
+  if (!lista.length) return '<div class="vazia"><em>✅</em>Nenhuma queixa registrada</div>';
+  return lista.map(q => {
+    const corGrav = q.gravidade==='grave' ? 'vermelho' : q.gravidade==='moderada' ? 'ambar' : 'cinza';
+    return `<div class="il">
+      <div class="av av-${corGrav==='vermelho'?'r':corGrav==='ambar'?'a':'v'}">⚠️</div>
+      <div class="ii">
+        <div class="in">${q.paciente_nome} <span class="badge b${corGrav[0]}">${q.gravidade||'moderada'}</span></div>
+        <div class="is">${q.descricao?.substring(0,80)}${q.descricao?.length>80?'...':''}</div>
+        <div class="is">${q.medicamento?`💊 ${q.medicamento} · `:''} ${q.data_registro||''}</div>
+      </div>
+      <div class="ia">
+        ${q.status==='pendente' ? `<button class="btn btn-v btn-sm" onclick="resolverQueixa('${q.id}')">✅ Resolver</button>` : '<span class="badge bv">resolvida</span>'}
+        <button class="btn btn-az btn-sm" onclick="verQueixa(${JSON.stringify(q).replace(/'/g,'&#39;')})">Ver</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function abrirRegistrarQueixa() {
+  const pacientes = []; // será preenchido dinamicamente
+  abrirModal('⚠️ Registrar queixa/reação', `
+    <div class="fg"><label class="lbl">Paciente</label>
+      <input class="inp" id="q-paciente" placeholder="Nome do paciente" list="q-pac-list">
+      <datalist id="q-pac-list"></datalist>
+    </div>
+    <div class="fg"><label class="lbl">Medicamento suspeito</label>
+      <input class="inp" id="q-med" placeholder="Ex: Metformina 500mg">
+    </div>
+    <div class="fg"><label class="lbl">Descrição da queixa/reação</label>
+      <textarea class="inp" id="q-desc" rows="3" placeholder="Descreva os sintomas ou queixa relatada pelo paciente..." style="resize:vertical"></textarea>
+    </div>
+    <div class="fg"><label class="lbl">Gravidade</label>
+      <select class="inp" id="q-grav">
+        <option value="leve">Leve — incomoda mas não impede atividades</option>
+        <option value="moderada" selected>Moderada — atrapalha as atividades</option>
+        <option value="grave">Grave — precisou buscar atendimento médico</option>
+      </select>
+    </div>
+    <div class="modal-acoes">
+      <button class="btn btn-c" onclick="fecharModal()">Cancelar</button>
+      <button class="btn btn-v" onclick="salvarQueixa(this)">Registrar</button>
+    </div>`);
+
+  // Carrega pacientes da UBS para o datalist
+  sb(`farmabot_pacientes?ubs_nome=eq.${enc(U.ubs)}&select=id,nome,telefone,medicamentos`).then(pacs => {
+    if (!Array.isArray(pacs)) return;
+    window._pacientesQueixa = pacs;
+    const dl = document.getElementById('q-pac-list');
+    if (dl) dl.innerHTML = pacs.map(p=>`<option value="${p.nome}">`).join('');
+  });
+}
+
+async function salvarQueixa(btn) {
+  const nome = document.getElementById('q-paciente').value.trim();
+  const med = document.getElementById('q-med').value.trim();
+  const desc = document.getElementById('q-desc').value.trim();
+  const grav = document.getElementById('q-grav').value;
+  if (!desc) { toast('Descreva a queixa', 'err'); return; }
+
+  setBtnLoad(btn, true);
+  const pac = (window._pacientesQueixa||[]).find(p => p.nome === nome);
+
+  try {
+    const r = await fetch(`${BACKEND}/queixa`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-admin-token': AT },
+      body: JSON.stringify({
+        paciente_id: pac?.id || null,
+        paciente_nome: nome || 'Não identificado',
+        telefone: pac?.telefone || null,
+        ubs_nome: U.ubs,
+        descricao: desc,
+        medicamento: med || null,
+        gravidade: grav
+      })
+    });
+    const d = await r.json();
+    if (d.ok) {
+      toast(grav==='grave' ? '🚨 Queixa grave registrada! Notificação enviada.' : '✅ Queixa registrada!');
+      fecharModal();
+      renderQueixas();
+    } else toast(d.erro || 'Erro', 'err');
+  } catch(e) { toast('Erro de conexão', 'err'); }
+  setBtnLoad(btn, false);
+}
+
+async function resolverQueixa(id) {
+  try {
+    await fetch(`${BACKEND}/queixa/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', 'x-admin-token': AT },
+      body: JSON.stringify({ status: 'resolvida' })
+    });
+    toast('✅ Queixa marcada como resolvida');
+    renderQueixas();
+  } catch(e) { toast('Erro', 'err'); }
+}
+
+function verQueixa(q) {
+  const corGrav = q.gravidade==='grave' ? 'vermelho' : q.gravidade==='moderada' ? 'ambar' : 'cinza';
+  abrirModal(`⚠️ Queixa — ${q.paciente_nome}`, `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px;font-size:13px">
+      <div><span style="color:var(--texto-sec)">Paciente:</span> ${q.paciente_nome}</div>
+      <div><span style="color:var(--texto-sec)">Data:</span> ${q.data_registro||'—'}</div>
+      <div><span style="color:var(--texto-sec)">Medicamento:</span> ${q.medicamento||'—'}</div>
+      <div><span style="color:var(--texto-sec)">Gravidade:</span> <span class="badge b${corGrav[0]}">${q.gravidade}</span></div>
+    </div>
+    <div class="fg"><label class="lbl">Descrição</label>
+      <div style="background:var(--cinza-bg);border-radius:8px;padding:12px;font-size:13px;line-height:1.6">${q.descricao}</div>
+    </div>
+    <div class="modal-acoes">
+      <button class="btn btn-c" onclick="fecharModal()">Fechar</button>
+      ${q.status==='pendente'?`<button class="btn btn-v" onclick="fecharModal();resolverQueixa('${q.id}')">✅ Marcar como resolvida</button>`:''}
+    </div>`);
+}
+
+// ── Mapa de cobertura (gestor) ────────────────────────────────────────────────
+async function renderCobertura() {
+  document.getElementById('main-content').innerHTML = `
+    <div class="sec-titulo">🗺️ Mapa de cobertura</div>
+    <div style="text-align:center;padding:32px;color:var(--texto-ter)"><span class="spin" style="border-color:rgba(0,0,0,.1);border-top-color:var(--verde)"></span> Carregando dados...</div>`;
+
+  try {
+    const r = await fetch(`${BACKEND}/cobertura`, { headers: { 'x-admin-token': AT } });
+    const d = await r.json();
+    const cobertura = d.cobertura || [];
+
+    if (!cobertura.length) {
+      document.getElementById('main-content').innerHTML = `
+        <div class="sec-titulo">🗺️ Mapa de cobertura</div>
+        <div class="card"><div class="vazia"><em>🏥</em>Nenhuma UBS cadastrada ainda</div></div>`;
+      return;
+    }
+
+    const maxPac = Math.max(...cobertura.map(u=>u.pacientes), 1);
+
+    document.getElementById('main-content').innerHTML = `
+      <div class="sec-titulo">🗺️ Mapa de cobertura — ${cobertura.length} UBS(s)</div>
+
+      <!-- Cards de totais gerais -->
+      <div class="dash-grid" style="margin-bottom:24px">
+        <div class="dc"><div class="dc-lbl">Total pacientes</div><div class="dc-num">${cobertura.reduce((s,u)=>s+u.pacientes,0)}</div><div class="dc-sub">na rede</div></div>
+        <div class="dc a"><div class="dc-lbl">Alertas Beers</div><div class="dc-num">${cobertura.reduce((s,u)=>s+u.beers,0)}</div><div class="dc-sub">medicamentos sinalizados</div></div>
+        <div class="dc r"><div class="dc-lbl">Renovações pendentes</div><div class="dc-num">${cobertura.reduce((s,u)=>s+u.renovacoes,0)}</div><div class="dc-sub">receitas vencendo</div></div>
+        <div class="dc ro"><div class="dc-lbl">Conversas pendentes</div><div class="dc-num">${cobertura.reduce((s,u)=>s+u.conversas,0)}</div><div class="dc-sub">aguardando resposta</div></div>
+      </div>
+
+      <!-- Tabela + barras por UBS -->
+      <div class="card">
+        <div class="card-tit">Indicadores por UBS</div>
+        <div style="overflow-x:auto">
+          <table style="width:100%;border-collapse:collapse;font-size:13px">
+            <thead>
+              <tr style="border-bottom:2px solid var(--borda)">
+                <th style="text-align:left;padding:10px 8px;color:var(--texto-sec);font-size:11px;text-transform:uppercase">UBS</th>
+                <th style="text-align:center;padding:10px 8px;color:var(--verde);font-size:11px;text-transform:uppercase">Pacientes</th>
+                <th style="text-align:center;padding:10px 8px;color:var(--ambar);font-size:11px;text-transform:uppercase">Beers</th>
+                <th style="text-align:center;padding:10px 8px;color:var(--vermelho);font-size:11px;text-transform:uppercase">Renovações</th>
+                <th style="text-align:center;padding:10px 8px;color:var(--roxo);font-size:11px;text-transform:uppercase">Conversas</th>
+                <th style="text-align:center;padding:10px 8px;color:var(--vermelho);font-size:11px;text-transform:uppercase">Queixas</th>
+                <th style="padding:10px 8px;color:var(--texto-sec);font-size:11px;text-transform:uppercase">Cobertura</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${cobertura.map(u => {
+                const pct = Math.round((u.pacientes / maxPac) * 100);
+                const nivel = u.beers > 3 || u.renovacoes > 3 || u.queixas > 0 ? 'vermelho' : u.beers > 0 || u.renovacoes > 0 ? 'ambar' : 'verde';
+                return `<tr style="border-bottom:1px solid var(--borda)">
+                  <td style="padding:10px 8px;font-weight:600">${u.ubs}</td>
+                  <td style="text-align:center;padding:10px 8px"><span style="background:var(--verde-bg);color:var(--verde);padding:2px 8px;border-radius:20px;font-weight:700">${u.pacientes}</span></td>
+                  <td style="text-align:center;padding:10px 8px">${u.beers > 0 ? `<span style="background:var(--ambar-bg);color:var(--ambar);padding:2px 8px;border-radius:20px;font-weight:700">${u.beers}</span>` : '<span style="color:var(--texto-ter)">—</span>'}</td>
+                  <td style="text-align:center;padding:10px 8px">${u.renovacoes > 0 ? `<span style="background:var(--vermelho-bg);color:var(--vermelho);padding:2px 8px;border-radius:20px;font-weight:700">${u.renovacoes}</span>` : '<span style="color:var(--texto-ter)">—</span>'}</td>
+                  <td style="text-align:center;padding:10px 8px">${u.conversas > 0 ? `<span style="background:var(--roxo-bg);color:var(--roxo);padding:2px 8px;border-radius:20px;font-weight:700">${u.conversas}</span>` : '<span style="color:var(--texto-ter)">—</span>'}</td>
+                  <td style="text-align:center;padding:10px 8px">${u.queixas > 0 ? `<span style="background:var(--vermelho-bg);color:var(--vermelho);padding:2px 8px;border-radius:20px;font-weight:700">${u.queixas}</span>` : '<span style="color:var(--texto-ter)">—</span>'}</td>
+                  <td style="padding:10px 8px;min-width:120px">
+                    <div style="background:var(--cinza-bg);border-radius:20px;height:8px;overflow:hidden">
+                      <div style="background:var(--${nivel});height:100%;width:${pct}%;border-radius:20px;transition:width .5s"></div>
+                    </div>
+                    <div style="font-size:10px;color:var(--texto-ter);margin-top:3px">${pct}% do máximo</div>
+                  </td>
+                </tr>`;
+              }).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Legenda -->
+      <div class="card" style="margin-top:0">
+        <div style="display:flex;gap:16px;flex-wrap:wrap;font-size:12px">
+          <span>🟢 Verde — sem alertas críticos</span>
+          <span>🟡 Amarelo — Beers ou renovações pendentes</span>
+          <span>🔴 Vermelho — queixas ou múltiplos alertas</span>
+        </div>
+      </div>`;
+  } catch(e) {
+    document.getElementById('main-content').innerHTML = `
+      <div class="sec-titulo">🗺️ Mapa de cobertura</div>
+      <div class="card"><div class="vazia"><em>⚠️</em>Erro ao carregar dados de cobertura</div></div>`;
+  }
 }
 
 async function verificarPendencias() {
