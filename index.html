@@ -1577,16 +1577,16 @@ function renderConvLista(lista, isGestor) {
       </div>
       <div class="conv-chat">
         <div class="msgs" id="msgs-${c.id}">${renderMsgsChat(c.msgs||[])}</div>
-        ${c.pendente && !isGestor ? `
+        ${!isGestor && c.pendente ? `
         <div class="resp-area">
           <textarea class="resp-inp" id="resp-${c.id}" placeholder="Responda ao paciente..." rows="2"></textarea>
           <button class="btn-enviar" onclick="enviarResp('${c.id}','${c.numero}')">Enviar ✈️</button>
         </div>
         <button class="btn-resolver-txt" onclick="resolverConv('${c.id}')">Marcar como resolvida sem responder</button>
         ` : isGestor ? `
-        <div style="display:flex;justify-content:center;gap:12px;padding:8px">
+        <div style="display:flex;justify-content:center;gap:12px;padding:10px">
           ${c.pendente ? `<button class="btn btn-v btn-sm" onclick="resolverConv('${c.id}')">✅ Marcar como resolvida</button>` : ''}
-          <button class="btn btn-sm" style="background:var(--vermelho-bg);color:var(--vermelho);border:1px solid var(--vermelho-borda)" onclick="confirmarExcluirConversa('${c.id}')">🗑 Excluir conversa</button>
+          <button class="btn btn-sm" style="background:var(--vermelho-bg);color:var(--vermelho);border:1px solid var(--vermelho-borda)" onclick="confirmarExcluirConversa('${c.id}')">🗑 Excluir</button>
         </div>
         ` : `<p style="font-size:12px;color:var(--texto-sec);text-align:center;padding:6px">✅ Conversa resolvida</p>`}
       </div>
