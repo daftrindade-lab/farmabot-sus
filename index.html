@@ -1620,6 +1620,20 @@ function toggleConv(id) {
 }
 
 async function atualizarConversaAberta() {
+  if (!_conversaAbertaId) return;
+  try {
+    const conv = await sb(`farmabot_conversas?id=eq.${_conversaAbertaId}&select=msgs,pendente`);
+    if (!Array.isArray(conv) || !conv[0]) return;
+    const novasMsgs = JSON.stringify(conv[0].msgs);
+    if (novasMsgs === _conversaAbertaMsgs) return;
+    _conversaAbertaMsgs = novasMsgs;
+    const mc = document.getElementById(`msgs-${_conversaAbertaId}`);
+    if (mc) {
+      mc.innerHTML = renderMsgsChat(conv[0].msgs || []);
+      mc.scrollTop = mc.scrollHeight;
+    }
+  } catch{}
+}
 
 async function enviarResp(convId, numPac) {
   const ta=document.getElementById(`resp-${convId}`);
