@@ -285,11 +285,11 @@ function iniciarApp() {
   document.getElementById('tubs').textContent = U.ubs;
   renderSidebar();
   irSecao('dashboard');
-  setInterval(verificarPendencias, 5000);
+  setInterval(verificarPendencias, 15000);
   // Intervalo dedicado para atualizar conversa aberta em tempo real
   setInterval(async () => {
     if (_conversaAbertaId) await atualizarConversaAberta();
-  }, 3000);
+  }, 8000);
 }
 
 // ── SIDEBAR ──
@@ -2290,15 +2290,8 @@ async function verificarPendencias() {
     const path = U.perfil==='gestor'
       ? 'farmabot_conversas?pendente=eq.true&select=id'
       : `farmabot_conversas?unidade=eq.${enc(U.ubs)}&pendente=eq.true&select=id`;
-    const d=await sb(path);
-    const total = Array.isArray(d)?d.length:0;
-    atualizarBadgeConv(total);
-
-    // Se estiver na tela de conversas e houver novas pendências, recarrega a lista
-    if ((_secaoAtual === 'conversas' || _secaoAtual === 'conversas-gestor') && total !== (window._convPend?.length||0)) {
-      const isGestor = _secaoAtual === 'conversas-gestor';
-      await renderConversas(isGestor);
-    }
+    const d = await sb(path);
+    atualizarBadgeConv(Array.isArray(d) ? d.length : 0);
   } catch{}
 }
 
