@@ -1583,7 +1583,12 @@ function renderConvLista(lista, isGestor) {
           <button class="btn-enviar" onclick="enviarResp('${c.id}','${c.numero}')">Enviar ✈️</button>
         </div>
         <button class="btn-resolver-txt" onclick="resolverConv('${c.id}')">Marcar como resolvida sem responder</button>
-        ` : c.pendente && isGestor ? `<p style="font-size:12px;color:var(--texto-sec);text-align:center;padding:6px">Acompanhamento do gestor — resposta pelo painel do farmacêutico</p>` : `<p style="font-size:12px;color:var(--texto-sec);text-align:center;padding:6px">✅ Conversa resolvida</p>`}
+        ` : isGestor ? `
+        <div style="display:flex;justify-content:center;gap:12px;padding:8px">
+          ${c.pendente ? `<button class="btn btn-v btn-sm" onclick="resolverConv('${c.id}')">✅ Marcar como resolvida</button>` : ''}
+          <button class="btn btn-sm" style="background:var(--vermelho-bg);color:var(--vermelho);border:1px solid var(--vermelho-borda)" onclick="confirmarExcluirConversa('${c.id}')">🗑 Excluir conversa</button>
+        </div>
+        ` : `<p style="font-size:12px;color:var(--texto-sec);text-align:center;padding:6px">✅ Conversa resolvida</p>`}
       </div>
     </div>`;
   }).join('');
@@ -1652,7 +1657,31 @@ async function enviarResp(convId, numPac) {
 
 async function resolverConv(id) {
   await sb(`farmabot_conversas?id=eq.${id}`,{method:'PATCH',body:JSON.stringify({pendente:false})});
-  toast('✅ Conversa resolvida');irSecao('conversas');
+  toast('✅ Conversa resolvida');
+  _conversaAbertaId = null;
+  irSecao(U.perfil==='gestor' ? 'conversas-gestor' : 'conversas');
+}
+
+function confirmarExcluirConversa(id) {
+  abrirModal('🗑 Excluir conversa', `
+    <p style="font-size:14px;color:var(--texto-sec);margin-bottom:16px">
+      Tem certeza que deseja excluir esta conversa permanentemente?<br>
+      <span style="color:var(--vermelho);font-size:13px">Esta ação não pode ser desfeita.</span>
+    </p>
+    <div class="modal-acoes">
+      <button class="btn btn-c" onclick="fecharModal()">Cancelar</button>
+      <button class="btn" style="background:var(--vermelho);color:white" onclick="excluirConversa('${id}')">🗑 Excluir</button>
+    </div>`);
+}
+
+async function excluirConversa(id) {
+  try {
+    await sb(`farmabot_conversas?id=eq.${id}`, { method: 'DELETE' });
+    toast('🗑 Conversa excluída');
+    fecharModal();
+    _conversaAbertaId = null;
+    irSecao('conversas-gestor');
+  } catch(e) { toast('Erro ao excluir', 'err'); }
 }
 
 // ── HELPERS ──
