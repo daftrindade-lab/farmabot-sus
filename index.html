@@ -285,7 +285,7 @@ function iniciarApp() {
   document.getElementById('tubs').textContent = U.ubs;
   renderSidebar();
   irSecao('dashboard');
-  setInterval(verificarPendencias, 30000);
+  setInterval(verificarPendencias, 5000);
 }
 
 // ── SIDEBAR ──
@@ -1593,6 +1593,38 @@ function renderMsgsChat(msgs) {
 }
 
 function toggleConv(id) {
+  const item = document.getElementById(`ci-${id}`);
+  if (!item) return;
+  const chat = item.querySelector('.conv-chat');
+  if (!chat) return;
+  const aberto = chat.style.display === 'block';
+  // Fecha todas
+  document.querySelectorAll('.conv-chat').forEach(e => e.style.display = 'none');
+  _conversaAbertaId = null;
+  _conversaAbertaMsgs = null;
+  if (!aberto) {
+    chat.style.display = 'block';
+    _conversaAbertaId = id;
+    const mc = document.getElementById(`msgs-${id}`);
+    if (mc) { mc.scrollTop = mc.scrollHeight; _conversaAbertaMsgs = mc.innerHTML; }
+  }
+}
+
+async function atualizarConversaAberta() {
+  if (!_conversaAbertaId) return;
+  try {
+    const conv = await sb(`farmabot_conversas?id=eq.${_conversaAbertaId}&select=msgs,pendente`);
+    if (!Array.isArray(conv) || !conv[0]) return;
+    const novasMsgs = JSON.stringify(conv[0].msgs);
+    if (novasMsgs === _conversaAbertaMsgs) return;
+    _conversaAbertaMsgs = novasMsgs;
+    const mc = document.getElementById(`msgs-${_conversaAbertaId}`);
+    if (mc) {
+      mc.innerHTML = renderMsgsChat(conv[0].msgs || []);
+      mc.scrollTop = mc.scrollHeight;
+    }
+  } catch{}
+}
   const el=document.getElementById(`ci-${id}`);
   const era=el.classList.contains('aberta');
   document.querySelectorAll('.conv-item.aberta').forEach(e=>e.classList.remove('aberta'));
@@ -2251,8 +2283,14 @@ async function verificarPendencias() {
       : `farmabot_conversas?unidade=eq.${enc(U.ubs)}&pendente=eq.true&select=id`;
     const d=await sb(path);
     atualizarBadgeConv(Array.isArray(d)?d.length:0);
+    // Atualiza conversa aberta automaticamente
+    if (_conversaAbertaId) await atualizarConversaAberta();
   } catch{}
 }
+
+// ID da conversa atualmente aberta no painel
+let _conversaAbertaId = null;
+let _conversaAbertaMsgs = null;
 
 function abrirModal(titulo, html) {
   document.getElementById('modal-body').innerHTML=`<div class="modal-tit">${titulo}</div>${html}`;
