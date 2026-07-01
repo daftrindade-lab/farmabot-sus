@@ -371,6 +371,7 @@ function renderSidebar() {
     {id:'ubs',icon:'🏥',label:'UBSs'},
     {id:'farmaceuticos',icon:'👩‍⚕️',label:'Farmacêuticos'},
     {id:'pacientes',icon:'👥',label:'Pacientes'},
+    {id:'faqs',icon:'💡',label:'FAQs do bot'},
     {id:'cobertura',icon:'🗺️',label:'Mapa de cobertura'},
     {id:'educacao',icon:'📚',label:'Educação em Saúde'},
     {id:'conversas-gestor',icon:'💬',label:'Conversas',badge:'conv'},
@@ -404,6 +405,7 @@ function irSecao(id) {
     farmaceuticos: renderFarmaceuticos,
     cobertura: renderCobertura,
     pacientes: renderPacientes,
+    faqs: renderFaqs,
     renovacoes: renderRenovacoes,
     queixas: renderQueixas,
     familia: renderFamilia,
@@ -535,6 +537,99 @@ async function cadastrarUbs(btn) {
     else toast(d.erro||'Erro','err');
   } catch { toast('Erro de conexão','err'); }
   setBtnLoad(btn, false);
+}
+
+// ── FAQs DO BOT (GESTOR) ──
+async function renderFaqs() {
+  document.getElementById('main-content').innerHTML = `
+    <div class="sec-titulo" style="justify-content:space-between">
+      <span>💡 FAQs do bot</span>
+      <button class="btn btn-v" onclick="abrirFaqForm()">➕ Nova FAQ</button>
+    </div>
+    <p style="font-size:13px;color:var(--texto-sec);margin-bottom:14px">
+      Quando o paciente manda uma mensagem com alguma dessas palavras-chave, o bot responde automaticamente com o texto configurado — sem precisar do farmacêutico.
+    </p>
+    <div class="card"><div id="lista-faqs">Carregando...</div></div>`;
+  try {
+    const r = await fetch(`${BACKEND}/admin/faqs`, { headers: { 'x-admin-token': AT } });
+    const d = await r.json();
+    document.getElementById('lista-faqs').innerHTML = renderListaFaqs(d.faqs || []);
+  } catch {
+    document.getElementById('lista-faqs').innerHTML = '<div class="vazia"><em>⚠️</em>Erro ao carregar FAQs</div>';
+  }
+}
+
+function renderListaFaqs(faqs) {
+  if (!faqs.length) return '<div class="vazia"><em>💡</em>Nenhuma FAQ cadastrada ainda</div>';
+  return faqs.map(f => `<div class="il" style="align-items:flex-start">
+    <div class="av av-v">💡</div>
+    <div class="ii">
+      <div class="in">${(f.gatilhos||[]).join(', ')}</div>
+      <div class="is" style="white-space:pre-wrap">${f.resposta}</div>
+      ${f.ativo === false ? '<span class="badge br" style="margin-top:4px;display:inline-block">inativa</span>' : ''}
+    </div>
+    <div class="ia">
+      <button class="btn btn-am btn-sm" onclick='abrirFaqForm(${JSON.stringify(f).replace(/'/g,"&#39;")})'>✏️</button>
+      <button class="btn btn-ve btn-sm" onclick="confirmarExcluirFaq('${f.id}')">🗑</button>
+    </div>
+  </div>`).join('');
+}
+
+function abrirFaqForm(faq) {
+  const editando = !!faq;
+  abrirModal(editando ? 'Editar FAQ' : 'Nova FAQ', `
+    <div class="fg">
+      <label class="lbl">Palavras-chave (separadas por vírgula)</label>
+      <input class="inp" id="fq-gatilhos" placeholder="ex: horário, que horas, funciona" value="${editando ? (faq.gatilhos||[]).join(', ') : ''}">
+    </div>
+    <div class="fg">
+      <label class="lbl">Resposta do bot</label>
+      <textarea class="inp" id="fq-resposta" rows="5" placeholder="Texto que o bot vai responder...">${editando ? faq.resposta : ''}</textarea>
+    </div>
+    <div class="modal-acoes">
+      <button class="btn btn-c" onclick="fecharModal()">Cancelar</button>
+      <button class="btn btn-v" onclick="${editando ? `salvarFaq(this,'${faq.id}')` : 'salvarFaq(this,null)'}">Salvar</button>
+    </div>`);
+}
+
+async function salvarFaq(btn, id) {
+  const gatilhos = document.getElementById('fq-gatilhos').value.split(',').map(g=>g.trim().toLowerCase()).filter(Boolean);
+  const resposta = document.getElementById('fq-resposta').value.trim();
+  if (!gatilhos.length || !resposta) { toast('Preencha as palavras-chave e a resposta','err'); return; }
+  setBtnLoad(btn, true);
+  try {
+    const url = id ? `${BACKEND}/admin/faqs/${id}` : `${BACKEND}/admin/faqs`;
+    const r = await fetch(url, {
+      method: id ? 'PATCH' : 'POST',
+      headers: { 'Content-Type':'application/json', 'x-admin-token': AT },
+      body: JSON.stringify({ gatilhos, resposta })
+    });
+    const d = await r.json();
+    if (d.ok) { toast(id ? '✅ FAQ atualizada!' : '✅ FAQ cadastrada!'); fecharModal(); renderFaqs(); }
+    else toast(d.erro || 'Erro', 'err');
+  } catch { toast('Erro de conexão', 'err'); }
+  setBtnLoad(btn, false);
+}
+
+function confirmarExcluirFaq(id) {
+  abrirModal('🗑 Excluir FAQ', `
+    <p style="font-size:14px;color:var(--texto-sec);margin-bottom:16px">
+      Tem certeza que deseja excluir esta FAQ?<br>
+      <span style="color:var(--vermelho);font-size:13px">Esta ação não pode ser desfeita.</span>
+    </p>
+    <div class="modal-acoes">
+      <button class="btn btn-c" onclick="fecharModal()">Cancelar</button>
+      <button class="btn" style="background:var(--vermelho);color:white" onclick="excluirFaq('${id}')">🗑 Excluir</button>
+    </div>`);
+}
+
+async function excluirFaq(id) {
+  try {
+    const r = await fetch(`${BACKEND}/admin/faqs/${id}`, { method: 'DELETE', headers: { 'x-admin-token': AT } });
+    const d = await r.json();
+    if (d.ok) { toast('🗑 FAQ excluída'); fecharModal(); renderFaqs(); }
+    else toast(d.erro || 'Erro ao excluir', 'err');
+  } catch { toast('Erro de conexão', 'err'); }
 }
 
 // ── FARMACÊUTICOS (GESTOR) ──
