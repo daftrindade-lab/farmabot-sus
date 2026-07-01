@@ -438,7 +438,32 @@ function renderListaUbs(ubs) {
     <div class="av av-v">🏥</div>
     <div class="ii"><div class="in">${u.nome_ubs}</div><div class="is">${u.numero_whatsapp||'—'} · ID: ${u.phone_number_id}</div></div>
     <span class="badge bv">ativa</span>
+    <button class="btn btn-sm" style="background:var(--vermelho-bg);color:var(--vermelho);border:1px solid var(--vermelho-borda)" onclick="confirmarExcluirUbs('${u.nome_ubs.replace(/'/g,"\\'")}')">🗑</button>
   </div>`).join('');
+}
+
+function confirmarExcluirUbs(nomeUbs) {
+  abrirModal('🗑 Excluir UBS', `
+    <p style="font-size:14px;color:var(--texto-sec);margin-bottom:16px">
+      Tem certeza que deseja excluir a UBS <strong>${nomeUbs}</strong>?<br>
+      <span style="color:var(--vermelho);font-size:13px">Pacientes, conversas e queixas já registrados para essa UBS não serão apagados — só ela deixa de aparecer nas listas ativas.</span>
+    </p>
+    <div class="modal-acoes">
+      <button class="btn btn-c" onclick="fecharModal()">Cancelar</button>
+      <button class="btn" style="background:var(--vermelho);color:white" onclick="excluirUbs('${nomeUbs.replace(/'/g,"\\'")}')">🗑 Excluir</button>
+    </div>`);
+}
+
+async function excluirUbs(nomeUbs) {
+  try {
+    const r = await fetch(`${BACKEND}/admin/ubs?nome_ubs=${encodeURIComponent(nomeUbs)}`, {
+      method: 'DELETE',
+      headers: { 'x-admin-token': AT }
+    });
+    const d = await r.json();
+    if (d.ok) { toast('🗑 UBS excluída'); fecharModal(); renderUbs(); }
+    else toast(d.erro || 'Erro ao excluir', 'err');
+  } catch { toast('Erro de conexão', 'err'); }
 }
 
 async function fetchUbs() {
