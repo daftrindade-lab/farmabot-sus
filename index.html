@@ -255,6 +255,12 @@ const AT = 'DAF1401';
 let U = null; // usuário logado
 let secaoAtiva = '';
 
+// ── Normalizar número (mesma lógica do server.js — remove DDI 55) ──
+function normalizarNumero(numero) {
+  const digits = String(numero || '').replace(/\D/g, '');
+  return digits.startsWith('55') ? digits.slice(2) : digits;
+}
+
 // ── SUPABASE ──
 async function sb(path, opts={}) {
   const r = await fetch(`${SB}/rest/v1/${path}`, {
@@ -2307,7 +2313,7 @@ async function responderQueixa(queixaId, telefone) {
         body: JSON.stringify({
           id: `queixa_conv_${queixaId}`,
           paciente: q.paciente_nome || telefone,
-          numero: q.telefone || telefone,
+          numero: normalizarNumero(q.telefone || telefone),
           unidade: q.ubs_nome || U.ubs,
           msgs: [
             { tipo: 'paciente', texto: `⚠️ Queixa: ${q.descricao}`, hora },
