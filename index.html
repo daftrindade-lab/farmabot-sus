@@ -324,6 +324,7 @@ function renderSidebar() {
     {id:'dashboard',icon:'📊',label:'Dashboard'},
     {id:'ubs',icon:'🏥',label:'UBSs'},
     {id:'farmaceuticos',icon:'👩‍⚕️',label:'Farmacêuticos'},
+    {id:'pacientes',icon:'👥',label:'Pacientes'},
     {id:'cobertura',icon:'🗺️',label:'Mapa de cobertura'},
     {id:'educacao',icon:'📚',label:'Educação em Saúde'},
     {id:'conversas-gestor',icon:'💬',label:'Conversas',badge:'conv'},
@@ -603,19 +604,22 @@ async function toggleFarm(id,nome,ativo) {
 
 // ── PACIENTES (FARMACÊUTICO) ──
 async function renderPacientes() {
-  const pacs = await sb(`farmabot_pacientes?ubs_nome=eq.${enc(U.ubs)}&order=nome.asc`);
+  const isGestor = U.perfil === 'gestor';
+  const pacs = isGestor
+    ? await sb(`farmabot_pacientes?order=ubs_nome.asc,nome.asc`)
+    : await sb(`farmabot_pacientes?ubs_nome=eq.${enc(U.ubs)}&order=nome.asc`);
   const lista = Array.isArray(pacs) ? pacs : [];
   document.getElementById('main-content').innerHTML = `
     <div class="sec-titulo" style="justify-content:space-between">
-      <span>👥 Meus pacientes</span>
+      <span>👥 ${isGestor ? 'Pacientes (todas as UBSs)' : 'Meus pacientes'}</span>
       <button class="btn btn-v" onclick="abrirCadastrarPaciente()">➕ Novo paciente</button>
     </div>
     <div class="card">
-      <div id="lista-pacientes">${renderListaPac(lista)}</div>
+      <div id="lista-pacientes">${renderListaPac(lista, isGestor)}</div>
     </div>`;
 }
 
-function renderListaPac(lista) {
+function renderListaPac(lista, mostrarUbs) {
   if (!lista.length) return '<div class="vazia"><em>👥</em>Nenhum paciente cadastrado.<br><button class="btn btn-v" style="margin-top:12px" onclick="abrirCadastrarPaciente()">➕ Cadastrar primeiro paciente</button></div>';
   return lista.map(p=>{
     const meds = (p.medicamentos||[]);
@@ -625,7 +629,7 @@ function renderListaPac(lista) {
       <div class="av ${temBeers?'av-r':'av-v'}">${ini}</div>
       <div class="ii">
         <div class="in">${p.nome} ${temBeers?'<span class="badge br">⚠ Beers</span>':''}</div>
-        <div class="is">${p.idade||'?'} anos · ${p.telefone||'—'} · ${meds.length} medicamento(s)</div>
+        <div class="is">${mostrarUbs ? `${p.ubs_nome||'sem UBS'} · ` : ''}${p.idade||'?'} anos · ${p.telefone||'—'} · ${meds.length} medicamento(s)</div>
       </div>
       <div class="ia">
         <button class="btn btn-az btn-sm" onclick='verPaciente(${JSON.stringify(p).replace(/'/g,"&#39;")})'>Ver</button>
@@ -636,7 +640,9 @@ function renderListaPac(lista) {
   }).join('');
 }
 
-function abrirCadastrarPaciente() {
+async function abrirCadastrarPaciente() {
+  const isGestor = U.perfil === 'gestor';
+  const opcoesUbs = isGestor ? (await fetchUbs()).map(u=>`<option value="${u.nome_ubs}">${u.nome_ubs}</option>`).join('') : '';
   abrirModal('Novo paciente',`
     <div class="fg"><label class="lbl">Nome completo</label><input class="inp" id="np-nome" placeholder="Nome completo"></div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
@@ -644,6 +650,7 @@ function abrirCadastrarPaciente() {
       <div class="fg"><label class="lbl">Data de nascimento</label><input class="inp" type="date" id="np-nasc"></div>
     </div>
     <div class="fg"><label class="lbl">Telefone WhatsApp</label><input class="inp" id="np-tel" placeholder="62985816375" oninput="this.value=this.value.replace(/\D/g,'')"></div>
+    ${isGestor ? `<div class="fg"><label class="lbl">UBS</label><select class="inp" id="np-ubs">${opcoesUbs}</select></div>` : ''}
     <div class="fg"><label class="lbl">Condições (HAS, DM, etc.)</label>
       <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px" id="cond-chips"></div>
       <div style="display:flex;gap:6px">
@@ -677,13 +684,16 @@ async function salvarNovoPaciente(btn) {
   const cpf=document.getElementById('np-cpf').value.trim();
   const nasc=document.getElementById('np-nasc').value;
   const tel=document.getElementById('np-tel').value.trim();
+  const ubsSelect = document.getElementById('np-ubs');
+  const ubs = ubsSelect ? ubsSelect.value : U.ubs;
   if (!nome||!tel){toast('Nome e telefone são obrigatórios','err');return;}
+  if (!ubs){toast('Selecione a UBS','err');return;}
   setBtnLoad(btn,true);
   const idade = nasc ? Math.floor((Date.now()-new Date(nasc))/(365.25*24*3600*1000)) : null;
   try {
     const d = await sb('farmabot_pacientes',{method:'POST',body:JSON.stringify({
       nome,cpf:cpf||null,data_nascimento:nasc||null,idade,telefone:tel,
-      ubs_nome:U.ubs,ubs_id:U.id,condicoes:condsTemp,medicamentos:[]
+      ubs_nome:ubs,ubs_id:U.perfil==='gestor'?null:U.id,condicoes:condsTemp,medicamentos:[]
     })});
     if (!d?.message){toast('✅ Paciente cadastrado!');fecharModal();condsTemp=[];renderPacientes();}
     else toast(d.message||'Erro','err');
@@ -1509,9 +1519,13 @@ async function excluirPaciente(id) {
   } catch(e) { toast('Erro ao excluir paciente', 'err'); }
 }
 
-function editarPaciente(p) {
+async function editarPaciente(p) {
   const condsAtuais = p.condicoes || [];
   window._editCondsTemp = [...condsAtuais];
+  const ubsList = await fetchUbs();
+  const opcoesUbs = ubsList.map(u=>`<option value="${u.nome_ubs}" ${u.nome_ubs===p.ubs_nome?'selected':''}>${u.nome_ubs}</option>`).join('');
+  const opcaoAtualForaLista = p.ubs_nome && !ubsList.some(u=>u.nome_ubs===p.ubs_nome)
+    ? `<option value="${p.ubs_nome}" selected>${p.ubs_nome} (não cadastrada)</option>` : '';
   abrirModal(`Editar: ${p.nome}`,`
     <div class="fg"><label class="lbl">Nome completo</label><input class="inp" id="ep-nome" value="${p.nome||''}"></div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
@@ -1519,6 +1533,7 @@ function editarPaciente(p) {
       <div class="fg"><label class="lbl">Data de nascimento</label><input class="inp" type="date" id="ep-nasc" value="${p.data_nascimento||''}"></div>
     </div>
     <div class="fg"><label class="lbl">Telefone WhatsApp</label><input class="inp" id="ep-tel" value="${p.telefone||''}" oninput="this.value=this.value.replace(/\D/g,'')"></div>
+    <div class="fg"><label class="lbl">UBS</label><select class="inp" id="ep-ubs">${opcaoAtualForaLista}${opcoesUbs}</select></div>
     <div class="fg"><label class="lbl">Condições</label>
       <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px" id="edit-cond-chips">
         ${condsAtuais.map((c,i)=>`<span class="med-chip">${c} <span onclick="removerCondEdit(${i})" style="cursor:pointer;margin-left:2px">×</span></span>`).join('')}
@@ -1559,11 +1574,12 @@ async function salvarEditPac(id) {
   const tel=document.getElementById('ep-tel').value.trim();
   const cpf=document.getElementById('ep-cpf').value.trim();
   const nasc=document.getElementById('ep-nasc').value;
+  const ubs=document.getElementById('ep-ubs').value;
   const idade = nasc ? Math.floor((Date.now()-new Date(nasc))/(365.25*24*3600*1000)) : null;
   const condicoes = window._editCondsTemp || [];
   if (!nome) { toast('Nome é obrigatório','err'); return; }
   await sb(`farmabot_pacientes?id=eq.${id}`,{method:'PATCH',body:JSON.stringify({
-    nome, telefone:tel, cpf:cpf||null, data_nascimento:nasc||null, idade, condicoes
+    nome, telefone:tel, cpf:cpf||null, data_nascimento:nasc||null, idade, condicoes, ubs_nome:ubs
   })});
   toast('✅ Paciente atualizado!');
   fecharModal();
