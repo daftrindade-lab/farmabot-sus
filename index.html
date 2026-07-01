@@ -164,6 +164,8 @@ input,select,textarea{font-family:inherit;}
 /* SPINNER */
 .spin{display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,.4);border-top-color:#fff;border-radius:50%;animation:sp .6s linear infinite;}
 @keyframes sp{to{transform:rotate(360deg);}}
+@keyframes pulsar{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.85;transform:scale(1.05)}}
+@keyframes slideIn{from{opacity:0;transform:translateX(20px)}to{opacity:1;transform:translateX(0)}}
 
 /* TOAST */
 #toast{position:fixed;bottom:20px;right:20px;padding:11px 18px;border-radius:9px;font-size:13px;font-weight:600;z-index:999;transform:translateY(60px);opacity:0;transition:all .3s;pointer-events:none;}
@@ -212,9 +214,26 @@ input,select,textarea{font-family:inherit;}
       <span>💊</span>
       <div><div class="topbar-nome" id="tnome">—</div><div class="topbar-ubs" id="tubs">—</div></div>
     </div>
-    <div style="display:flex;align-items:center;gap:8px;">
+    <div style="display:flex;align-items:center;gap:12px;">
+      <!-- Indicadores de alerta no topo -->
+      <div id="alerta-conversas" style="display:none;cursor:pointer;background:var(--ambar);color:white;border-radius:20px;padding:4px 12px;font-size:12px;font-weight:700;animation:pulsar 2s infinite" onclick="irSecao(U.perfil==='gestor'?'conversas-gestor':'conversas')">
+        💬 <span id="alerta-conv-num">0</span> conversa(s)
+      </div>
+      <div id="alerta-queixas" style="display:none;cursor:pointer;background:var(--vermelho);color:white;border-radius:20px;padding:4px 12px;font-size:12px;font-weight:700;animation:pulsar 2s infinite" onclick="irSecao('queixas')">
+        ⚠️ <span id="alerta-queixa-num">0</span> queixa(s)
+      </div>
       <div id="notif-wrap" style="display:none"><span class="nav-badge r" id="notif-num">0</span></div>
       <button class="btn-sair" onclick="sair()">Sair</button>
+    </div>
+  </div>
+
+  <!-- Toast de nova mensagem -->
+  <div id="toast-notif" style="display:none;position:fixed;top:70px;right:16px;z-index:9999;background:white;border-radius:12px;box-shadow:0 4px 20px rgba(0,0,0,.15);padding:14px 18px;max-width:320px;border-left:4px solid var(--ambar);animation:slideIn .3s ease">
+    <div style="font-weight:700;font-size:13px;color:var(--texto);margin-bottom:4px" id="toast-notif-titulo">Nova mensagem</div>
+    <div style="font-size:12px;color:var(--texto-sec)" id="toast-notif-texto">—</div>
+    <div style="display:flex;gap:8px;margin-top:10px">
+      <button id="toast-notif-btn" class="btn btn-v btn-sm" style="font-size:11px">Ver agora</button>
+      <button class="btn btn-c btn-sm" style="font-size:11px" onclick="document.getElementById('toast-notif').style.display='none'">Dispensar</button>
     </div>
   </div>
 
@@ -2331,14 +2350,85 @@ async function renderCobertura() {
   }
 }
 
+// Contadores anteriores para detectar novidades
+let _prevConvs = 0;
+let _prevQueixas = 0;
+
 async function verificarPendencias() {
   try {
-    const path = U.perfil==='gestor'
-      ? 'farmabot_conversas?pendente=eq.true&select=id'
-      : `farmabot_conversas?unidade=eq.${enc(U.ubs)}&pendente=eq.true&select=id`;
-    const d = await sb(path);
-    atualizarBadgeConv(Array.isArray(d) ? d.length : 0);
+    const ubsEnc = enc(U.ubs);
+    const isGestor = U.perfil === 'gestor';
+
+    // Busca conversas pendentes
+    const pathConv = isGestor
+      ? 'farmabot_conversas?pendente=eq.true&select=id,paciente'
+      : `farmabot_conversas?unidade=eq.${ubsEnc}&pendente=eq.true&select=id,paciente`;
+    const convs = await sb(pathConv);
+    const totalConv = Array.isArray(convs) ? convs.length : 0;
+
+    // Busca queixas pendentes
+    const pathQueixa = isGestor
+      ? 'farmabot_queixas?status=eq.pendente&select=id,paciente_nome'
+      : `farmabot_queixas?ubs_nome=eq.${ubsEnc}&status=eq.pendente&select=id,paciente_nome`;
+    const queixas = await sb(pathQueixa);
+    const totalQueixa = Array.isArray(queixas) ? queixas.length : 0;
+
+    // Atualiza badges do menu lateral
+    atualizarBadgeConv(totalConv);
+
+    // Atualiza alertas do topo
+    const elConv = document.getElementById('alerta-conversas');
+    const elQueixa = document.getElementById('alerta-queixas');
+    if (elConv) {
+      elConv.style.display = totalConv > 0 ? '' : 'none';
+      document.getElementById('alerta-conv-num').textContent = totalConv;
+    }
+    if (elQueixa) {
+      elQueixa.style.display = totalQueixa > 0 ? '' : 'none';
+      document.getElementById('alerta-queixa-num').textContent = totalQueixa;
+    }
+
+    // Detecta novidades e mostra toast
+    if (totalConv > _prevConvs) {
+      const novas = totalConv - _prevConvs;
+      const nome = convs[0]?.paciente || 'Paciente';
+      mostrarToastNotif(
+        `💬 Nova mensagem de paciente`,
+        `${nome} enviou uma mensagem para você`,
+        () => irSecao(isGestor ? 'conversas-gestor' : 'conversas')
+      );
+    } else if (totalQueixa > _prevQueixas) {
+      const novas = totalQueixa - _prevQueixas;
+      const nome = queixas[0]?.paciente_nome || 'Paciente';
+      mostrarToastNotif(
+        `⚠️ Nova queixa/reação adversa`,
+        `${nome} registrou uma reação adversa`,
+        () => irSecao('queixas')
+      );
+    }
+
+    _prevConvs = totalConv;
+    _prevQueixas = totalQueixa;
+
+    // Atualiza conversa aberta automaticamente
+    if (_conversaAbertaId) await atualizarConversaAberta();
   } catch{}
+}
+
+function mostrarToastNotif(titulo, texto, acao) {
+  const el = document.getElementById('toast-notif');
+  const elTit = document.getElementById('toast-notif-titulo');
+  const elTxt = document.getElementById('toast-notif-texto');
+  const elBtn = document.getElementById('toast-notif-btn');
+  if (!el) return;
+  elTit.textContent = titulo;
+  elTxt.textContent = texto;
+  elBtn.onclick = () => { el.style.display = 'none'; acao(); };
+  el.style.display = 'block';
+  el.style.animation = 'none';
+  setTimeout(() => el.style.animation = 'slideIn .3s ease', 10);
+  // Auto-fecha após 10 segundos
+  setTimeout(() => { if (el.style.display !== 'none') el.style.display = 'none'; }, 10000);
 }
 
 // ID da conversa atualmente aberta no painel
