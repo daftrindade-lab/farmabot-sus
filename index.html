@@ -2093,7 +2093,6 @@ function filtrarQueixas(tipo) {
 
 function renderListaQueixas(lista) {
   if (!lista.length) return '<div class="vazia"><em>✅</em>Nenhuma queixa registrada</div>';
-  // Armazena queixas globalmente para acesso pelo botão Ver
   window._queixasCache = lista;
   return lista.map((q, idx) => {
     const corGrav = q.gravidade==='grave' ? 'vermelho' : q.gravidade==='moderada' ? 'ambar' : 'cinza';
@@ -2105,11 +2104,37 @@ function renderListaQueixas(lista) {
         <div class="is">${q.medicamento?`💊 ${q.medicamento} · `:''} ${q.data_registro||''}</div>
       </div>
       <div class="ia">
-        ${q.status==='pendente' ? `<button class="btn btn-v btn-sm" onclick="resolverQueixa('${q.id}')">✅ Resolver</button>` : '<span class="badge bv">resolvida</span>'}
+        ${q.status==='pendente'
+          ? `<button class="btn btn-v btn-sm" onclick="resolverQueixa('${q.id}')">✅ Resolver</button>`
+          : `<span class="badge bv">resolvida</span>`}
         <button class="btn btn-az btn-sm" onclick="verQueixaIdx(${idx})">Ver</button>
+        ${q.status==='resolvida' || U.perfil==='gestor'
+          ? `<button class="btn btn-sm" style="background:var(--vermelho-bg);color:var(--vermelho);border:1px solid var(--vermelho-borda)" onclick="confirmarExcluirQueixa('${q.id}')">🗑</button>`
+          : ''}
       </div>
     </div>`;
   }).join('');
+}
+
+function confirmarExcluirQueixa(id) {
+  abrirModal('🗑 Excluir queixa', `
+    <p style="font-size:14px;color:var(--texto-sec);margin-bottom:16px">
+      Tem certeza que deseja excluir esta queixa permanentemente?<br>
+      <span style="color:var(--vermelho);font-size:13px">Esta ação não pode ser desfeita.</span>
+    </p>
+    <div class="modal-acoes">
+      <button class="btn btn-c" onclick="fecharModal()">Cancelar</button>
+      <button class="btn" style="background:var(--vermelho);color:white" onclick="excluirQueixa('${id}')">🗑 Excluir</button>
+    </div>`);
+}
+
+async function excluirQueixa(id) {
+  try {
+    await sb(`farmabot_queixas?id=eq.${id}`, { method: 'DELETE' });
+    toast('🗑 Queixa excluída');
+    fecharModal();
+    renderQueixas();
+  } catch(e) { toast('Erro ao excluir', 'err'); }
 }
 
 function verQueixaIdx(idx) {
