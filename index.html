@@ -2403,6 +2403,7 @@ async function renderCobertura() {
                 <th style="text-align:center;padding:10px 8px;color:var(--vermelho);font-size:11px;text-transform:uppercase">Renovações</th>
                 <th style="text-align:center;padding:10px 8px;color:var(--roxo);font-size:11px;text-transform:uppercase">Conversas</th>
                 <th style="text-align:center;padding:10px 8px;color:var(--vermelho);font-size:11px;text-transform:uppercase">Queixas</th>
+                <th style="text-align:center;padding:10px 8px;color:var(--texto-sec);font-size:11px;text-transform:uppercase">Queixas (total)</th>
                 <th style="padding:10px 8px;color:var(--texto-sec);font-size:11px;text-transform:uppercase">Cobertura</th>
               </tr>
             </thead>
@@ -2417,6 +2418,7 @@ async function renderCobertura() {
                   <td style="text-align:center;padding:10px 8px">${u.renovacoes > 0 ? `<span style="background:var(--vermelho-bg);color:var(--vermelho);padding:2px 8px;border-radius:20px;font-weight:700">${u.renovacoes}</span>` : '<span style="color:var(--texto-ter)">—</span>'}</td>
                   <td style="text-align:center;padding:10px 8px">${u.conversas > 0 ? `<span style="background:var(--roxo-bg);color:var(--roxo);padding:2px 8px;border-radius:20px;font-weight:700">${u.conversas}</span>` : '<span style="color:var(--texto-ter)">—</span>'}</td>
                   <td style="text-align:center;padding:10px 8px">${u.queixas > 0 ? `<span style="background:var(--vermelho-bg);color:var(--vermelho);padding:2px 8px;border-radius:20px;font-weight:700">${u.queixas}</span>` : '<span style="color:var(--texto-ter)">—</span>'}</td>
+                  <td style="text-align:center;padding:10px 8px">${u.queixasTotal > 0 ? `<span style="background:var(--cinza-bg);color:var(--texto-sec);padding:2px 8px;border-radius:20px;font-weight:700">${u.queixasTotal}</span>` : '<span style="color:var(--texto-ter)">—</span>'}</td>
                   <td style="padding:10px 8px;min-width:120px">
                     <div style="background:var(--cinza-bg);border-radius:20px;height:8px;overflow:hidden">
                       <div style="background:var(--${nivel});height:100%;width:${pct}%;border-radius:20px;transition:width .5s"></div>
