@@ -2248,6 +2248,7 @@ async function resolverQueixa(id) {
 
 function verQueixa(q) {
   const corGrav = q.gravidade==='grave' ? 'vermelho' : q.gravidade==='moderada' ? 'ambar' : 'cinza';
+  const temTelefone = q.telefone && q.telefone !== '—';
   abrirModal(`⚠️ Queixa — ${q.paciente_nome}`, `
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px;font-size:13px">
       <div><span style="color:var(--texto-sec)">Paciente:</span> ${q.paciente_nome}</div>
@@ -2258,10 +2259,46 @@ function verQueixa(q) {
     <div class="fg"><label class="lbl">Descrição</label>
       <div style="background:var(--cinza-bg);border-radius:8px;padding:12px;font-size:13px;line-height:1.6">${q.descricao}</div>
     </div>
+    ${temTelefone ? `
+    <div class="fg" style="margin-top:12px"><label class="lbl">Responder ao paciente via WhatsApp</label>
+      <textarea class="inp" id="resp-queixa-${q.id}" rows="3" placeholder="Ex: Olá! Sobre sua queixa com ${q.medicamento||'o medicamento'}, recomendo..." style="resize:vertical"></textarea>
+    </div>` : ''}
     <div class="modal-acoes">
       <button class="btn btn-c" onclick="fecharModal()">Fechar</button>
+      ${temTelefone ? `<button class="btn btn-az" onclick="responderQueixa('${q.id}','${q.telefone}')">📤 Enviar resposta ao paciente</button>` : ''}
       ${q.status==='pendente'?`<button class="btn btn-v" onclick="fecharModal();resolverQueixa('${q.id}')">✅ Marcar como resolvida</button>`:''}
     </div>`);
+}
+
+async function responderQueixa(queixaId, telefone) {
+  const msg = document.getElementById(`resp-queixa-${queixaId}`)?.value?.trim();
+  if (!msg) { toast('Digite uma mensagem antes de enviar', 'err'); return; }
+
+  const btn = document.querySelector('.modal-acoes .btn-az');
+  if (btn) { btn.innerHTML = '<span class="spin"></span> Enviando...'; btn.disabled = true; }
+
+  try {
+    // Envia a mensagem via backend
+    const r = await fetch(`${BACKEND}/responder`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-admin-token': AT },
+      body: JSON.stringify({
+        conversa_id: `queixa_${queixaId}`,
+        numero_paciente: telefone,
+        mensagem: `⚠️ Sobre sua queixa:\n\n${msg}`,
+        nome_farmaceutico: U.nome,
+        nome_ubs: U.ubs
+      })
+    });
+    const d = await r.json();
+    if (d.ok) {
+      toast('📤 Resposta enviada ao paciente!');
+      // Marca queixa como resolvida
+      await sb(`farmabot_queixas?id=eq.${queixaId}`, { method: 'PATCH', body: JSON.stringify({ status: 'resolvida' }) });
+      fecharModal();
+      renderQueixas();
+    } else toast(d.erro || 'Erro ao enviar', 'err');
+  } catch(e) { toast('Erro de conexão', 'err'); }
 }
 
 // ── Mapa de cobertura (gestor) ────────────────────────────────────────────────
