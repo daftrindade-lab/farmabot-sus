@@ -2278,26 +2278,53 @@ async function responderQueixa(queixaId, telefone) {
   if (btn) { btn.innerHTML = '<span class="spin"></span> Enviando...'; btn.disabled = true; }
 
   try {
-    // Envia a mensagem via backend
+    // Busca dados da queixa para criar conversa vinculada
+    const queixas = await sb(`farmabot_queixas?id=eq.${queixaId}&select=*`);
+    const q = Array.isArray(queixas) && queixas[0] ? queixas[0] : null;
+
+    const msgAssinada = `👩‍⚕️ *${U.nome}* — ${U.ubs}\n\n⚠️ Sobre sua queixa:\n${msg}`;
+
+    // Envia via WhatsApp
     const r = await fetch(`${BACKEND}/responder`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-admin-token': AT },
       body: JSON.stringify({
         conversa_id: `queixa_${queixaId}`,
         numero_paciente: telefone,
-        mensagem: `⚠️ Sobre sua queixa:\n\n${msg}`,
+        mensagem: msg,
         nome_farmaceutico: U.nome,
         nome_ubs: U.ubs
       })
     });
     const d = await r.json();
-    if (d.ok) {
-      toast('📤 Resposta enviada ao paciente!');
-      // Marca queixa como resolvida
-      await sb(`farmabot_queixas?id=eq.${queixaId}`, { method: 'PATCH', body: JSON.stringify({ status: 'resolvida' }) });
-      fecharModal();
-      renderQueixas();
-    } else toast(d.erro || 'Erro ao enviar', 'err');
+    if (!d.ok) { toast(d.erro || 'Erro ao enviar', 'err'); return; }
+
+    // Cria conversa pendente para o paciente continuar respondendo
+    if (q) {
+      const hora = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+      await sb('farmabot_conversas', {
+        method: 'POST',
+        body: JSON.stringify({
+          id: `queixa_conv_${queixaId}`,
+          paciente: q.paciente_nome || telefone,
+          numero: q.telefone || telefone,
+          unidade: q.ubs_nome || U.ubs,
+          msgs: [
+            { tipo: 'paciente', texto: `⚠️ Queixa: ${q.descricao}`, hora },
+            { tipo: 'farmaceutico', texto: msgAssinada, hora, farmaceutico: U.nome }
+          ],
+          pendente: true,
+          hora
+        })
+      });
+    }
+
+    // Marca queixa como resolvida
+    await sb(`farmabot_queixas?id=eq.${queixaId}`, { method: 'PATCH', body: JSON.stringify({ status: 'resolvida' }) });
+
+    toast('📤 Resposta enviada! Conversa aberta para o paciente continuar.');
+    fecharModal();
+    renderQueixas();
   } catch(e) { toast('Erro de conexão', 'err'); }
 }
 
