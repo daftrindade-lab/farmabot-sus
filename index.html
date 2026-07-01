@@ -203,6 +203,7 @@ input,select,textarea{font-family:inherit;}
     <div class="fg"><label class="lbl">Login</label><input class="inp" id="li" placeholder="CPF" onkeydown="if(event.key==='Enter')login()"></div>
     <div class="fg"><label class="lbl">Senha</label><input class="inp" type="password" id="ls" placeholder="Sua senha" onkeydown="if(event.key==='Enter')login()"></div>
     <button class="btn-login-submit" onclick="login()">Entrar</button>
+    <div style="text-align:center;margin-top:12px"><a href="#" onclick="abrirEsqueciSenha();return false" style="font-size:12.5px;color:var(--texto-sec);text-decoration:underline;cursor:pointer">Esqueci minha senha</a></div>
     <div class="err-txt" id="lerr">Login ou senha incorretos.</div>
   </div>
 </div>
@@ -223,6 +224,7 @@ input,select,textarea{font-family:inherit;}
         ⚠️ <span id="alerta-queixa-num">0</span> queixa(s)
       </div>
       <div id="notif-wrap" style="display:none"><span class="nav-badge r" id="notif-num">0</span></div>
+      <button class="btn-sair" id="btn-trocar-senha" style="display:none" onclick="abrirTrocarSenha(false)">🔑 Trocar senha</button>
       <button class="btn-sair" onclick="sair()">Sair</button>
     </div>
   </div>
@@ -292,8 +294,50 @@ async function login() {
     U.perfil = U.perfil || 'farmaceutico';
     sb(`farmabot_usuarios?id=eq.${li}`,{method:'PATCH',body:JSON.stringify({ultimo_acesso:new Date().toISOString()})}).catch(()=>{});
     iniciarApp();
+    if (U.senha_provisoria) abrirTrocarSenha(true);
   } catch(e) { err.style.display = 'block'; err.textContent = 'Erro de conexão.'; }
 }
+
+// ── TROCAR SENHA ──
+function abrirTrocarSenha(primeiroAcesso) {
+  abrirModal(primeiroAcesso ? '🔑 Defina sua senha' : '🔑 Trocar senha', `
+    ${primeiroAcesso ? '<p style="font-size:13px;color:var(--texto-sec);margin-bottom:14px">Essa é sua senha provisória. Por segurança, defina uma senha só sua antes de continuar.</p>' : ''}
+    <div class="fg"><label class="lbl">Senha atual</label><input class="inp" type="password" id="ts-atual"></div>
+    <div class="fg"><label class="lbl">Nova senha</label><input class="inp" type="password" id="ts-nova"></div>
+    <div class="fg"><label class="lbl">Confirmar nova senha</label><input class="inp" type="password" id="ts-conf"></div>
+    <div class="modal-acoes">
+      ${primeiroAcesso ? '<button class="btn btn-c" onclick="fecharModal()">Deixar para depois</button>' : '<button class="btn btn-c" onclick="fecharModal()">Cancelar</button>'}
+      <button class="btn btn-v" onclick="salvarTrocaSenha(this)">Salvar nova senha</button>
+    </div>`);
+}
+
+async function salvarTrocaSenha(btn) {
+  const atual = document.getElementById('ts-atual').value;
+  const nova = document.getElementById('ts-nova').value;
+  const conf = document.getElementById('ts-conf').value;
+  if (atual !== U.senha) { toast('Senha atual incorreta', 'err'); return; }
+  if (!nova || nova.length < 6) { toast('A nova senha deve ter pelo menos 6 caracteres', 'err'); return; }
+  if (nova !== conf) { toast('As senhas não coincidem', 'err'); return; }
+  setBtnLoad(btn, true);
+  try {
+    await sb(`farmabot_usuarios?id=eq.${U.id}`, { method: 'PATCH', body: JSON.stringify({ senha: nova, senha_provisoria: false }) });
+    U.senha = nova; U.senha_provisoria = false;
+    toast('✅ Senha atualizada!');
+    fecharModal();
+  } catch { toast('Erro ao atualizar senha', 'err'); }
+  setBtnLoad(btn, false);
+}
+
+// ── ESQUECI MINHA SENHA ──
+function abrirEsqueciSenha() {
+  abrirModal('🔑 Esqueci minha senha', `
+    <p style="font-size:14px;color:var(--texto-sec);line-height:1.5">
+      Por segurança, a redefinição de senha é feita pela gestora do DAF.
+    </p>
+    <p style="font-size:14px;color:var(--texto-sec);line-height:1.5;margin-top:10px">
+      Entre em contato com a <strong>Vanessa</strong> (Diretoria de Assistência Farmacêutica) informando seu nome e UBS. Ela vai gerar uma senha provisória nova pelo painel de gestão, em "Farmacêuticos".
+    </p>
+    <div class="modal-acoes"><button class="btn btn-v" onclick="fecharModal()">Entendi</button></div>`);
 
 function sair() {
   U = null;
@@ -308,6 +352,7 @@ function iniciarApp() {
   document.getElementById('tela-app').style.display = 'block';
   document.getElementById('tnome').textContent = U.nome;
   document.getElementById('tubs').textContent = U.ubs;
+  document.getElementById('btn-trocar-senha').style.display = U.perfil === 'farmaceutico' ? 'inline-flex' : 'none';
   renderSidebar();
   irSecao('dashboard');
   setInterval(verificarPendencias, 15000);
