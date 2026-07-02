@@ -372,6 +372,7 @@ function renderSidebar() {
     {id:'farmaceuticos',icon:'👩‍⚕️',label:'Farmacêuticos'},
     {id:'pacientes',icon:'👥',label:'Pacientes'},
     {id:'faqs',icon:'💡',label:'FAQs do bot'},
+    {id:'insulina',icon:'💉',label:'Insulina (Diabéticos)'},
     {id:'cobertura',icon:'🗺️',label:'Mapa de cobertura'},
     {id:'educacao',icon:'📚',label:'Educação em Saúde'},
     {id:'conversas-gestor',icon:'💬',label:'Conversas',badge:'conv'},
@@ -380,6 +381,7 @@ function renderSidebar() {
     {id:'pacientes',icon:'👥',label:'Meus pacientes'},
     {id:'renovacoes',icon:'📋',label:'Renovações',badge:'renov'},
     {id:'queixas',icon:'⚠️',label:'Queixas/Reações'},
+    {id:'insulina',icon:'💉',label:'Insulina (Diabéticos)'},
     {id:'familia',icon:'👨‍👩‍👧',label:'Farmácia da família'},
     {id:'educacao',icon:'📚',label:'Educação em Saúde'},
     {id:'conversas',icon:'💬',label:'Conversas',badge:'conv'},
@@ -406,6 +408,7 @@ function irSecao(id) {
     cobertura: renderCobertura,
     pacientes: renderPacientes,
     faqs: renderFaqs,
+    insulina: renderInsulina,
     renovacoes: renderRenovacoes,
     queixas: renderQueixas,
     familia: renderFamilia,
@@ -630,6 +633,217 @@ async function excluirFaq(id) {
     if (d.ok) { toast('🗑 FAQ excluída'); fecharModal(); renderFaqs(); }
     else toast(d.erro || 'Erro ao excluir', 'err');
   } catch { toast('Erro de conexão', 'err'); }
+}
+
+// ── INSULINA (DIABÉTICOS) ──
+const TIPOS_INSULINA = ['NPH', 'Regular', 'Glargina'];
+
+function calcularIdadeIns(dataNasc) {
+  if (!dataNasc) return null;
+  const hoje = new Date(), nasc = new Date(dataNasc);
+  let idade = hoje.getFullYear() - nasc.getFullYear();
+  const m = hoje.getMonth() - nasc.getMonth();
+  if (m < 0 || (m === 0 && hoje.getDate() < nasc.getDate())) idade--;
+  return idade;
+}
+
+// Critério de elegibilidade da glargina: DM1 de 2 a 17 anos, OU maior que 70 anos (DM1 ou DM2)
+function elegivelGlarginaIns(idade, tipoDiabetes) {
+  if (idade == null) return null; // idade desconhecida — não dá pra avaliar
+  if (tipoDiabetes === 'tipo_1' && idade >= 2 && idade <= 17) return true;
+  if (idade > 70 && (tipoDiabetes === 'tipo_1' || tipoDiabetes === 'tipo_2')) return true;
+  return false;
+}
+
+async function renderInsulina() {
+  const isGestor = U.perfil === 'gestor';
+  document.getElementById('main-content').innerHTML = `
+    <div class="sec-titulo" style="justify-content:space-between">
+      <span>💉 Pacientes diabéticos em uso de insulina</span>
+      <div style="display:flex;gap:8px">
+        ${isGestor ? '<button class="btn btn-c" onclick="exportarInsulinaCSV()">⬇️ Exportar CSV</button>' : ''}
+        <button class="btn btn-v" onclick="abrirInsulinaForm()">➕ Novo cadastro</button>
+      </div>
+    </div>
+    <p style="font-size:13px;color:var(--texto-sec);margin-bottom:14px">
+      Cadastro para acompanhamento e envio da lista mensal ao estado. Glargina segue critério: DM1 de 2 a 17 anos, ou maiores de 70 anos (DM1 ou DM2).
+    </p>
+    <div class="card"><div id="lista-insulina">Carregando...</div></div>`;
+  const lista = isGestor
+    ? await sb(`daf_pacientes_insulina?ativo=eq.true&order=ubs_nome.asc,nome.asc`)
+    : await sb(`daf_pacientes_insulina?ativo=eq.true&ubs_nome=eq.${enc(U.ubs)}&order=nome.asc`);
+  document.getElementById('lista-insulina').innerHTML = renderListaInsulina(Array.isArray(lista)?lista:[], isGestor);
+}
+
+function renderListaInsulina(lista, mostrarUbs) {
+  if (!lista.length) return '<div class="vazia"><em>💉</em>Nenhum paciente cadastrado ainda</div>';
+  return lista.map(p => {
+    const idade = calcularIdadeIns(p.data_nascimento);
+    const tipoLabel = p.tipo_diabetes === 'tipo_1' ? 'DM tipo 1' : 'DM tipo 2';
+    const insulinasTxt = (p.insulinas||[]).map(i => {
+      const alerta = i.tipo === 'Glargina' && elegivelGlarginaIns(idade, p.tipo_diabetes) === false;
+      return `${i.tipo} ${i.quantidade||''}${i.unidade?(' '+i.unidade):''}${alerta ? ' ⚠️' : ''}`;
+    }).join(' · ');
+    const temAlerta = (p.insulinas||[]).some(i => i.tipo === 'Glargina' && elegivelGlarginaIns(idade, p.tipo_diabetes) === false);
+    return `<div class="il">
+      <div class="av ${temAlerta?'av-r':'av-v'}">💉</div>
+      <div class="ii">
+        <div class="in">${p.nome} <span class="badge ${p.tipo_diabetes==='tipo_1'?'bv':'ba'}">${tipoLabel}</span></div>
+        <div class="is">${mostrarUbs ? `${p.ubs_nome} · ` : ''}${idade!=null?idade+' anos':'idade não informada'} · ${insulinasTxt || 'sem insulina cadastrada'}</div>
+      </div>
+      <div class="ia">
+        <button class="btn btn-am btn-sm" onclick='abrirInsulinaForm(${JSON.stringify(p).replace(/'/g,"&#39;")})'>✏️</button>
+        <button class="btn btn-ve btn-sm" onclick="confirmarExcluirInsulina('${p.id}','${p.nome.replace(/'/g,"&apos;")}')">🗑</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function abrirInsulinaForm(p) {
+  const editando = !!p;
+  const isGestor = U.perfil === 'gestor';
+  const opcoesUbs = isGestor ? (await fetchUbs()).map(u=>`<option value="${u.nome_ubs}" ${editando&&u.nome_ubs===p.ubs_nome?'selected':''}>${u.nome_ubs}</option>`).join('') : '';
+  const insAtuais = editando ? (p.insulinas||[]) : [];
+  const getIns = tipo => insAtuais.find(i=>i.tipo===tipo);
+  abrirModal(editando ? `Editar: ${p.nome}` : 'Novo cadastro — Insulina', `
+    <div class="fg"><label class="lbl">Nome completo</label><input class="inp" id="ins-nome" value="${editando?p.nome:''}"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div class="fg"><label class="lbl">CPF</label><input class="inp" id="ins-cpf" value="${editando?(p.cpf||''):''}" maxlength="11" oninput="this.value=this.value.replace(/\D/g,'')"></div>
+      <div class="fg"><label class="lbl">Data de nascimento</label><input class="inp" type="date" id="ins-nasc" value="${editando?(p.data_nascimento||''):''}" onchange="atualizarIdadePreview()"></div>
+    </div>
+    <div id="idade-preview" style="font-size:12px;color:var(--texto-sec);margin:-6px 0 10px 2px"></div>
+    <div class="fg"><label class="lbl">Telefone</label><input class="inp" id="ins-tel" value="${editando?(p.telefone||''):''}" oninput="this.value=this.value.replace(/\D/g,'')"></div>
+    ${isGestor ? `<div class="fg"><label class="lbl">UBS</label><select class="inp" id="ins-ubs">${opcoesUbs}</select></div>` : ''}
+    <div class="fg"><label class="lbl">Tipo de diabetes</label>
+      <select class="inp" id="ins-tipo" onchange="atualizarIdadePreview()">
+        <option value="tipo_1" ${editando&&p.tipo_diabetes==='tipo_1'?'selected':''}>Tipo 1</option>
+        <option value="tipo_2" ${editando&&p.tipo_diabetes==='tipo_2'?'selected':''}>Tipo 2</option>
+      </select>
+    </div>
+    <div class="fg"><label class="lbl">Insulinas em uso</label>
+      <div style="display:flex;flex-direction:column;gap:8px" id="ins-insulinas">
+        ${TIPOS_INSULINA.map(tipo => {
+          const atual = getIns(tipo);
+          return `<div style="display:flex;align-items:center;gap:8px;padding:8px;border:1px solid var(--borda);border-radius:var(--r-sm)">
+            <input type="checkbox" id="ins-chk-${tipo}" ${atual?'checked':''} onchange="toggleInsulinaCampo('${tipo}')" style="width:16px;height:16px">
+            <label for="ins-chk-${tipo}" style="font-weight:600;font-size:13px;width:70px">${tipo}</label>
+            <input class="inp" id="ins-qtd-${tipo}" type="number" min="0" step="1" placeholder="Qtd" value="${atual?atual.quantidade:''}" style="width:80px;${atual?'':'display:none'}" oninput="if('${tipo}'==='Glargina')atualizarIdadePreview()">
+            <select class="inp" id="ins-un-${tipo}" style="width:110px;${atual?'':'display:none'}">
+              <option value="frasco" ${atual&&atual.unidade==='frasco'?'selected':''}>frasco(s)</option>
+              <option value="caneta" ${atual&&atual.unidade==='caneta'?'selected':''}>caneta(s)</option>
+              <option value="UI" ${atual&&atual.unidade==='UI'?'selected':''}>UI</option>
+            </select>
+          </div>`;
+        }).join('')}
+      </div>
+      <div id="glargina-alerta" style="display:none;margin-top:8px;padding:8px 10px;background:var(--vermelho-bg);color:var(--vermelho);border-radius:var(--r-sm);font-size:12.5px">
+        ⚠️ Fora do critério de elegibilidade da glargina (DM1 de 2 a 17 anos, ou maior de 70 anos DM1/DM2). Confirme se há autorização especial antes de salvar.
+      </div>
+    </div>
+    <div class="fg"><label class="lbl">Observações</label><textarea class="inp" id="ins-obs" rows="2">${editando?(p.observacoes||''):''}</textarea></div>
+    <div class="modal-acoes">
+      <button class="btn btn-c" onclick="fecharModal()">Cancelar</button>
+      <button class="btn btn-v" onclick="salvarInsulina(this,${editando?`'${p.id}'`:'null'})">Salvar</button>
+    </div>`);
+  setTimeout(atualizarIdadePreview, 0);
+}
+
+function toggleInsulinaCampo(tipo) {
+  const chk = document.getElementById(`ins-chk-${tipo}`).checked;
+  document.getElementById(`ins-qtd-${tipo}`).style.display = chk ? 'inline-block' : 'none';
+  document.getElementById(`ins-un-${tipo}`).style.display = chk ? 'inline-block' : 'none';
+  atualizarIdadePreview();
+}
+
+function atualizarIdadePreview() {
+  const nasc = document.getElementById('ins-nasc')?.value;
+  const tipo = document.getElementById('ins-tipo')?.value;
+  const idade = calcularIdadeIns(nasc);
+  const prev = document.getElementById('idade-preview');
+  if (prev) prev.textContent = idade != null ? `Idade calculada: ${idade} anos` : '';
+  const glarginaMarcada = document.getElementById('ins-chk-Glargina')?.checked;
+  const alertaDiv = document.getElementById('glargina-alerta');
+  if (alertaDiv) {
+    const elegivel = elegivelGlarginaIns(idade, tipo);
+    alertaDiv.style.display = (glarginaMarcada && elegivel === false) ? 'block' : 'none';
+  }
+}
+
+async function salvarInsulina(btn, id) {
+  const nome = document.getElementById('ins-nome').value.trim();
+  const cpf = document.getElementById('ins-cpf').value.trim();
+  const nasc = document.getElementById('ins-nasc').value;
+  const tel = document.getElementById('ins-tel').value.trim();
+  const ubsSelect = document.getElementById('ins-ubs');
+  const ubs = ubsSelect ? ubsSelect.value : U.ubs;
+  const tipoDiabetes = document.getElementById('ins-tipo').value;
+  const obs = document.getElementById('ins-obs').value.trim();
+  if (!nome) { toast('Nome é obrigatório', 'err'); return; }
+  if (!ubs) { toast('Selecione a UBS', 'err'); return; }
+
+  const insulinas = TIPOS_INSULINA.filter(t => document.getElementById(`ins-chk-${t}`).checked).map(t => ({
+    tipo: t,
+    quantidade: Number(document.getElementById(`ins-qtd-${t}`).value) || 0,
+    unidade: document.getElementById(`ins-un-${t}`).value
+  }));
+  if (!insulinas.length) { toast('Selecione pelo menos uma insulina', 'err'); return; }
+
+  setBtnLoad(btn, true);
+  const payload = {
+    nome, cpf: cpf||null, data_nascimento: nasc||null, telefone: tel||null,
+    ubs_nome: ubs, tipo_diabetes: tipoDiabetes, insulinas, observacoes: obs||null,
+    updated_at: new Date().toISOString()
+  };
+  try {
+    if (id) await sb(`daf_pacientes_insulina?id=eq.${id}`, { method:'PATCH', body: JSON.stringify(payload) });
+    else await sb('daf_pacientes_insulina', { method:'POST', body: JSON.stringify({...payload, ativo:true}) });
+    toast(id ? '✅ Cadastro atualizado!' : '✅ Paciente cadastrado!');
+    fecharModal();
+    renderInsulina();
+  } catch { toast('Erro ao salvar', 'err'); }
+  setBtnLoad(btn, false);
+}
+
+function confirmarExcluirInsulina(id, nome) {
+  abrirModal('🗑 Excluir cadastro', `
+    <p style="font-size:14px;color:var(--texto-sec)">Remover <strong>${nome}</strong> da lista de insulina?</p>
+    <div class="modal-acoes">
+      <button class="btn btn-c" onclick="fecharModal()">Cancelar</button>
+      <button class="btn" style="background:var(--vermelho);color:white" onclick="excluirInsulina('${id}')">🗑 Excluir</button>
+    </div>`);
+}
+
+async function excluirInsulina(id) {
+  await sb(`daf_pacientes_insulina?id=eq.${id}`, { method:'PATCH', body: JSON.stringify({ativo:false}) });
+  toast('🗑 Removido');
+  fecharModal();
+  renderInsulina();
+}
+
+async function exportarInsulinaCSV() {
+  const lista = await sb(`daf_pacientes_insulina?ativo=eq.true&order=ubs_nome.asc,nome.asc`);
+  const linhas = Array.isArray(lista) ? lista : [];
+  if (!linhas.length) { toast('Nenhum paciente cadastrado', 'err'); return; }
+  const cab = ['Nome','CPF','Data Nascimento','Idade','UBS','Tipo Diabetes','NPH (qtd)','Regular (qtd)','Glargina (qtd)','Telefone','Observações'];
+  const linhasCsv = linhas.map(p => {
+    const idade = calcularIdadeIns(p.data_nascimento);
+    const find = t => (p.insulinas||[]).find(i=>i.tipo===t);
+    const qtd = t => { const i = find(t); return i ? `${i.quantidade} ${i.unidade}` : ''; };
+    return [
+      p.nome, p.cpf||'', p.data_nascimento||'', idade!=null?idade:'', p.ubs_nome,
+      p.tipo_diabetes==='tipo_1'?'Tipo 1':'Tipo 2',
+      qtd('NPH'), qtd('Regular'), qtd('Glargina'), p.telefone||'', (p.observacoes||'').replace(/\n/g,' ')
+    ].map(v => `"${String(v).replace(/"/g,'""')}"`).join(';');
+  });
+  const csv = '\uFEFF' + [cab.join(';'), ...linhasCsv].join('\n');
+  const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const hoje = new Date().toISOString().slice(0,10);
+  a.href = url; a.download = `insulina_diabeticos_${hoje}.csv`;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  toast('⬇️ CSV exportado!');
 }
 
 // ── FARMACÊUTICOS (GESTOR) ──
